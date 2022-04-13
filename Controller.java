@@ -1,8 +1,11 @@
 import java.io.*;
+import java.lang.reflect.Array;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.time.Duration;
 import java.util.*;
 import java.lang.Math;
+import java.util.concurrent.CountDownLatch;
 import java.util.stream.Collectors;
 
 public class Controller {
@@ -32,7 +35,7 @@ public class Controller {
     };
 
     //Used to indicate the progress of an operation
-    private static Progress index;
+    private static HashMap<String,Progress> index;
 
     /**
      * The main function is called as soon as the Controller is started
@@ -71,6 +74,7 @@ public class Controller {
                 try{
                     System.out.println("Waiting for connection...");
                     Socket client = ss.accept();
+                    ss.setSoTimeout(timeout);
                     new Thread(new FileServiceThread(client)).start();
                 } catch(Exception e){System.out.println("error1 "+e);}
             }
@@ -105,7 +109,7 @@ public class Controller {
 //    }
     ////////////////////////////////////////////////////////////
 
-    public ArrayList<Integer> selectRDstores(){
+    public static ArrayList<Integer> selectRDstores(){
         int i=0;
         ArrayList<Integer>ports = new ArrayList<Integer>();
         //Gets all dstores that are active and sorts them based on the number of files they contain
@@ -119,16 +123,17 @@ public class Controller {
                         Map.Entry::getKey,
                         Map.Entry::getValue,
                         (e1, e2) -> e1, HashMap::new));
-//        for(Socket socket : dstores){
-//            if(i==R)
-//                break;
-//            i++;
-//        }
+        for(Socket socket : dstores){
+            if(i==R)
+                break;
+            i++;
+        }
         return ports;
     }
 
     static class FileServiceThread implements Runnable {
         Socket client;
+        CountDownLatch doneSignal;
 
         FileServiceThread(Socket c){
             client = c;
@@ -140,12 +145,18 @@ public class Controller {
             try {
                 BufferedReader in = new BufferedReader(
                         new InputStreamReader(client.getInputStream()));
+
+                PrintWriter clientOut = new PrintWriter(client.getOutputStream());
+
+
                 //Reading request
                 String line;
                 while((line =in.readLine())!=null) {
                     //Splitting request to command and arguments
                     String[] args = line.split(" ");
                     String command = args[0];
+
+                    PrintWriter responseWriter = new PrintWriter(client.getOutputStream());
 
                     if (command.equals("DSTORE")) {
                         Thread.sleep(5);
@@ -157,28 +168,63 @@ public class Controller {
                         out.flush();
                         System.out.println("[INFO]:Established connection with Dstore at port " + args[1]);
                     }
-                    if (command.equals("STORE")) {
+                    else if (command.equals("STORE")) {
                         String filename = args[1];
                         String filesize = args[2];
-                        //Updating index
-                        index = Progress.store_in_progress;
+                        //If file already exist, notify client
+                        if(index.get(filename)!=null){
+                            clientOut.println("ERROR_FILE_ALREADY_EXISTS");
+                            continue;
+                        }
 
-                        //ArrayList<int>ports = selectRDstores();
+                        //Updating index
+                        index.put(filename, Progress.store_in_progress);
+
+                        //If there are not enough DStores (less than R), notify client
+                        if(dstores.size()<R){
+                            clientOut.println("ERROR_NOT_ENOUGH_DSTORES");
+                            continue;
+                        }
+                        //Sending the list of ports to the client
+                        ArrayList<Integer>ports = selectRDstores();
+                        responseWriter.println("STORE_TO "+getString(ports));
+                        doneSignal = new CountDownLatch(R);
+                    }
+                    else if (command.equals("STORE_ACK")){
+                        String filename = args[1];
+                        index.put(filename,Progress.store_complete);
+                        doneSignal.countDown();
+                        //If all
+                        if(doneSignal.getCount()==0){
+                            clientOut.println("STORE_COMPLETED");
+                        }
+                    }
+                    else {
+                        System.out.println("[WARNING]: Command not found");
                     }
                 }
             } catch (IOException ex) {
                 //Removing dstore from dstores if connection is dropped
                 System.out.println("[INFO]:Connection with client at port "+client.getPort()+" was dropped");
                 for(Socket socket : dstores){
+                    System.out.println("Checking dstore "+socket.getPort());
                     if(client==socket){
                         dstores.remove(client);
+                        System.out.println(dstores.size());
                         return;
                     }
                 }
-//                ex.printStackTrace();
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
+        }
+
+        private String getString(ArrayList<Integer> ports) {
+            String ans = "";
+            for(Integer port : ports){
+                ans+=port+" ";
+            }
+            return ans;
         }
     }
 }

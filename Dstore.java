@@ -36,6 +36,7 @@ public class Dstore {
         out.flush();
         System.out.println("[INFO]:Sending CONNECT " + port);
         ServerSocket ss = new ServerSocket(port);
+        ss.setSoTimeout(timeout);
         while(true){
             try{
                 Socket client = ss.accept();
@@ -52,9 +53,9 @@ public class Dstore {
 
         Socket client;
 
-        DStoreServiceThread(Socket c){
+        DStoreServiceThread(Socket c) {
             client = c;
-            System.out.println("[INFO]:Client "+client.getInetAddress()+" connected");
+            System.out.println("[INFO]:Client " + client.getInetAddress() + " connected");
         }
 
         @Override
@@ -62,50 +63,44 @@ public class Dstore {
             /**
              * Reading TEXTUAL MESSAGES
              */
-            try{
+            try {
                 BufferedReader in = new BufferedReader(
                         new InputStreamReader(client.getInputStream()));
                 String line = in.readLine();
                 String[] args = line.split(" ");
                 String command = args[0];
-                System.out.println("Received:"+command);
-                if(command.equals("ACK")){
+                System.out.println("Received:" + command);
+                PrintWriter out = new PrintWriter(client.getOutputStream());
+
+                if (command.equals("ACK")) {
                     controller = client;
                     System.out.println("[INFO]:Established connection with controller");
                 }
-                if(command.equals("LIST")){
-                    PrintWriter out = new PrintWriter(client.getOutputStream());
+                if (command.equals("LIST")) {
                     out.println("LIST"); //TODO return filenames saved on this dstore
                 }
-
-            }
-            catch (IOException e){
+                if (command.equals("STORE")) {
+                    String filename = args[1];
+                    String filesize = args[2];
+                    //Acknowledging readiness to receive file
+                    out.println("ACK");
+                    //Creating a new file with the given filename
+                    File inputFile = new File(filename);
+                    //Creating input one-way input stream with the connected client
+                    FileInputStream fileIn = new FileInputStream(inputFile);
+                    fileIn.readNBytes(Integer.parseInt(filesize));
+                    fileIn.close();
+                    PrintWriter informController = new PrintWriter(controller.getOutputStream());
+                    informController.println("STORE_ACK "+filename);
+                }
+            } catch (IOException e) {
                 e.printStackTrace();
             }
         }
     }
 
-
 //        if(args[1].equals("put")){
-//            File inputFile = new File(args[2]);
-//            FileInputStream in = new FileInputStream(inputFile);
-//            try{
-//                Socket socket = new Socket("127.0.0.1",cport);
-//                OutputStream out = socket.getOutputStream();
-//                out.write(("put"+" "+args[3]+" ").getBytes());
-//                byte[] buf = new byte[1000]; int buflen;
-//                while ((buflen=in.read(buf)) != -1){
-//                    System.out.print("*");
-//                    out.write(buf,0,buflen);
-//                }
-//                while (true){
-//                }
-//            }catch(Exception e){
-//                System.out.println("error"+e);
-//                in.close();
-//            }
-//            System.out.println();
-//            in.close();
+//            DONE
 //        } else
 //        if(args[1].equals("get")){
 //            File outputFile = new File(args[2]);
