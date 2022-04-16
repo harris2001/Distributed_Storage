@@ -1,12 +1,11 @@
 import java.io.*;
-import java.lang.reflect.Array;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.time.Duration;
+import java.security.KeyPair;
 import java.util.*;
-import java.lang.Math;
 import java.util.concurrent.CountDownLatch;
-import java.util.stream.Collectors;
+import java.util.concurrent.TimeUnit;
+
 
 public class Controller {
 
@@ -19,12 +18,21 @@ public class Controller {
     //Period to start re-balance operation (in seconds)
     private static int rebalance_period;
 
-    //Keeps a list of all connected dstores
-    private static ArrayList<Socket> dstores;
-    //Keeps track of the stored files in each dstore
-    private static HashMap<Socket,ArrayList<String>>storage;
-    //Total number of files stored
-    private static int F;
+    //Keeps a list of the ports of all connected dstores
+    private static ArrayList<Integer> dstores;
+
+    //Keeps track of all files and their info
+//    private static ArrayList<FileStorage> storage;
+    private static Map<String, FileStorage> storage;
+
+    private static String BLACK = "\u001B[30m";
+    private static String RED = "\u001B[31m";
+    private static String GREEN = "\u001B[32m";
+    private static String YELLOW = "\u001B[33m";
+    private static String BLUE = "\u001B[34m";
+    private static String PURPLE = "\u001B[35m";
+    private static String CYAN = "\u001B[36m";
+    private static String WHITE = "\u001B[37m";
 
     //Possible progress states
     private enum Progress{
@@ -47,6 +55,8 @@ public class Controller {
         timeout = Integer.parseInt(args[2]);
         rebalance_period = Integer.parseInt(args[3]);
 
+//        storage = new ArrayList<>();
+        storage = new HashMap<>();
         dstores = new ArrayList<>();
 
 //        try {
@@ -74,7 +84,7 @@ public class Controller {
                 try{
                     System.out.println("Waiting for connection...");
                     Socket client = ss.accept();
-                    ss.setSoTimeout(timeout);
+//                    ss.setSoTimeout(timeout);
                     new Thread(new FileServiceThread(client)).start();
                 } catch(Exception e){System.out.println("error1 "+e);}
             }
@@ -116,18 +126,18 @@ public class Controller {
         //Finally it updates the storage object
 
 
-        storage = storage.entrySet().stream()
-                .filter(i1->dstores.contains(i1.getKey()))
-                .sorted(Comparator.comparing(i1->i1.getValue().size()))
-                .collect(Collectors.toMap(
-                        Map.Entry::getKey,
-                        Map.Entry::getValue,
-                        (e1, e2) -> e1, HashMap::new));
-        for(Socket socket : dstores){
-            if(i==R)
-                break;
-            i++;
-        }
+//        storage = storage.entrySet().stream()
+//                .filter(i1->dstores.contains(i1.getKey()))
+//                .sorted(Comparator.comparing(i1->i1.getValue().size()))
+//                .collect(Collectors.toMap(
+//                        Map.Entry::getKey,
+//                        Map.Entry::getValue,
+//                        (e1, e2) -> e1, HashMap::new));
+//        for(Socket socket : dstores){
+//            if(i==R)
+//                break;
+//            i++;
+//        }
         return ports;
     }
 
@@ -143,77 +153,110 @@ public class Controller {
         @Override
         public void run() {
             try {
-                BufferedReader in = new BufferedReader(
-                        new InputStreamReader(client.getInputStream()));
+                while(!client.isClosed()) {
+                    BufferedReader in = new BufferedReader(
+                            new InputStreamReader(client.getInputStream()));
+                    PrintWriter out = new PrintWriter(client.getOutputStream());
 
-                PrintWriter clientOut = new PrintWriter(client.getOutputStream());
+                    //Reading request
+                    String line;
+                    while ((line = in.readLine()) != null) {
 
+                        //Splitting request to command and arguments
+                        String[] args = line.split(" ");
+                        String command = args[0];
 
-                //Reading request
-                String line;
-                while((line =in.readLine())!=null) {
-                    //Splitting request to command and arguments
-                    String[] args = line.split(" ");
-                    String command = args[0];
+                        if (command.equals("DSTORE")) {
 
-                    PrintWriter responseWriter = new PrintWriter(client.getOutputStream());
+                            int dstorePort = Integer.parseInt(args[1]);
 
-                    if (command.equals("DSTORE")) {
-                        Thread.sleep(5);
-                        //Sending Acknowledgement message and opening a dedicated connection to dstore
-                        Socket dstoreSocket = new Socket(client.getInetAddress(), Integer.parseInt(args[1]));
-                        PrintWriter out = new PrintWriter(dstoreSocket.getOutputStream());
-                        out.println("ACK");
-                        System.out.println("[INFO]:Sending ACK");
-                        out.flush();
-                        System.out.println("[INFO]:Established connection with Dstore at port " + args[1]);
-                    }
-                    else if (command.equals("STORE")) {
-                        String filename = args[1];
-                        String filesize = args[2];
-                        //If file already exist, notify client
-                        if(index.get(filename)!=null){
-                            clientOut.println("ERROR_FILE_ALREADY_EXISTS");
-                            continue;
+                            //Adding new dstore in dstores array
+                            dstores.add(dstorePort);
+
+                            //Wait a little so that the connection goes live
+                            //                        Thread.sleep(5);
+
+                            //                        //Sending Acknowledgement message and opening a dedicated connection to dstore
+                            //                        Socket dstoreSocket = new Socket(client.getInetAddress(), Integer.parseInt(args[1]));
+                            //                        PrintWriter out = new PrintWriter(dstoreSocket.getOutputStream());
+                            //                        out.println("ACK");
+                            //                        out.flush();
+                            //                        System.out.println(BLUE+"[INFO]:Sending ACK");
+                            //                        System.out.println(GREEN+"[INFO]:Established connection with Dstore at port " + args[1]);
+                            //                        System.out.print(WHITE);
+                        } else if (command.equals("STORE")) {
+                            String filename = args[1];
+                            Integer filesize = Integer.parseInt(args[2]);
+                            //If file already exist, notify client
+                            if (index.get(filename) != null) {
+                                out.println("ERROR_FILE_ALREADY_EXISTS");
+                                out.flush();
+                                continue;
+                            }
+
+                            //Updating index
+                            index.put(filename, Progress.store_in_progress);
+
+                            //Adding file to the storage
+                            FileStorage file = new FileStorage(filesize, new ArrayList<>());
+                            storage.put(filename, file);
+
+                            //If there are not enough DStores (less than R), notify client
+                            if (dstores.size() < R) {
+                                out.println("ERROR_NOT_ENOUGH_DSTORES");
+                                out.flush();
+                                continue;
+                            }
+                            //Sending the list of ports to the client
+                            ArrayList<Integer> ports = selectRDstores();
+                            out.println("STORE_TO " + getString(ports));
+                            out.flush();
+                            doneSignal = new CountDownLatch(R);
+                            doneSignal.await(timeout, TimeUnit.MICROSECONDS);
+                        } else if (command.equals("STORE_ACK")) {
+                            String filename = args[1];
+
+                            //Assuming that there are files in the storage
+                            assert (!storage.isEmpty());
+
+                            //Adding dstore to the list of dstores that contain the file
+                            var fStore = storage.get(filename);
+                            fStore.addDstores(client);
+
+                            //Decrease doneSignal counter
+                            doneSignal.countDown();
+                            //When store operations are performed by all R dstores
+                            if (doneSignal.getCount() == 0) {
+                                //Change the index of the file to store_completed
+                                index.put(filename, Progress.store_complete);
+                                //Inform the client
+                                out.println("STORE_COMPLETED");
+                            }
+                        } else if (command.equals("LOAD")) {
+                            String filename = args[1];
+                            //                        Socket port1 = storage.get(filename).getDstores().get(0);
+                            //                        responseWriter.println("LOAD_FROM "+port1.getPort());
+
+                        } else if (command.equals("LIST")) {
+                            //                        out.println("LIST"); //TODO return filenames saved on this dstore
+                        } else {
+                            System.out.println("[WARNING]: Command" + command + " not found");
                         }
-
-                        //Updating index
-                        index.put(filename, Progress.store_in_progress);
-
-                        //If there are not enough DStores (less than R), notify client
-                        if(dstores.size()<R){
-                            clientOut.println("ERROR_NOT_ENOUGH_DSTORES");
-                            continue;
-                        }
-                        //Sending the list of ports to the client
-                        ArrayList<Integer>ports = selectRDstores();
-                        responseWriter.println("STORE_TO "+getString(ports));
-                        doneSignal = new CountDownLatch(R);
                     }
-                    else if (command.equals("STORE_ACK")){
-                        String filename = args[1];
-                        index.put(filename,Progress.store_complete);
-                        doneSignal.countDown();
-                        //If all
-                        if(doneSignal.getCount()==0){
-                            clientOut.println("STORE_COMPLETED");
-                        }
-                    }
-                    else {
-                        System.out.println("[WARNING]: Command not found");
+                    client.close();
+                }
+                System.out.println("[INFO]:Connection with client at port "+client.getPort()+" was dropped");
+                for(Integer socket : dstores){
+                    System.out.println("Checking dstore "+socket+" against "+client.getPort());
+                    if(socket.equals(client.getPort())){
+                        dstores.remove(client);
+                        System.out.println(dstores.size());
+                        break;
                     }
                 }
             } catch (IOException ex) {
                 //Removing dstore from dstores if connection is dropped
-                System.out.println("[INFO]:Connection with client at port "+client.getPort()+" was dropped");
-                for(Socket socket : dstores){
-                    System.out.println("Checking dstore "+socket.getPort());
-                    if(client==socket){
-                        dstores.remove(client);
-                        System.out.println(dstores.size());
-                        return;
-                    }
-                }
+
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
@@ -286,4 +329,30 @@ public class Controller {
 //            } catch (InterruptedException ex) {
 //                ex.printStackTrace();
 //            }
+
+
+
+class FileStorage {
+    private int size;
+    private ArrayList<Socket> dstores;
+
+    public FileStorage(int size, ArrayList<Socket> dstores){
+        this.size = size;
+        this.dstores = dstores;
+    }
+
+    public int getSize() {
+        return size;
+    }
+    public void setSize(int size) {
+        this.size = size;
+    }
+
+    public ArrayList<Socket> getDstores() {
+        return dstores;
+    }
+    public void addDstores(Socket dstores) {
+        this.dstores.add(dstores);
+    }
+}
 

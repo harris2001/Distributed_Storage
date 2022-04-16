@@ -1,6 +1,7 @@
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.SQLOutput;
 
@@ -20,7 +21,7 @@ public class Dstore {
      * The main function is called as soon as the Controller is started
      * @param args are the command line arguments passed in the Controller (Explanations bellow)
      */
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args){
         port = Integer.parseInt(args[0]);
         cport = Integer.parseInt(args[1]);
         timeout = Integer.parseInt(args[2]);
@@ -29,23 +30,44 @@ public class Dstore {
         /**
          * Establishing connection with the controller
          */
-        Socket helloSocket = new Socket("127.0.0.1", cport);
-        PrintWriter out = new PrintWriter(helloSocket.getOutputStream());
+        try {
+            Socket helloSocket = new Socket("127.0.0.1", cport);
+            //The hello socket is socket of the controller
+            controller = helloSocket;
 
-        out.println("DSTORE " + port);
-        out.flush();
-        System.out.println("[INFO]:Sending CONNECT " + port);
-        ServerSocket ss = new ServerSocket(port);
-        ss.setSoTimeout(timeout);
-        while(true){
-            try{
-                Socket client = ss.accept();
-                new Thread(new DStoreServiceThread(client)).start();
+            BufferedReader in = new BufferedReader(
+                    new InputStreamReader(helloSocket.getInputStream()));
+            PrintWriter out = new PrintWriter(helloSocket.getOutputStream());
+
+            out.println("DSTORE " + port);
+            out.flush();
+            System.out.println("[INFO]:Sending CONNECT " + port);
+//            ServerSocket ss = new ServerSocket(port);
+            while(true){
+                try{
+//                    Socket client = ss.accept();
+//                    new Thread(new DStoreServiceThread(client)).start();
+                    for(int i=0;i<10;i++){
+                        out.println("LOAD test"); out.flush();
+                        System.out.println("TCP message "+i+" sent");
+                        Thread.sleep(1000);
+                        while(true){
+
+                            String line;
+                            while((line =in.readLine())!=null) {
+                                System.out.println(line);
+                            }
+                        }
+                    }
+
+                }
+                catch (Exception e){
+                    System.out.println("[ERROR]:Issue while establishing connection with client");
+                    e.printStackTrace();
+                }
             }
-            catch (Exception e){
-                System.out.println("[ERROR]:Issue while establishing connection with client");
-                e.printStackTrace();
-            }
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 
@@ -76,9 +98,6 @@ public class Dstore {
                     controller = client;
                     System.out.println("[INFO]:Established connection with controller");
                 }
-                if (command.equals("LIST")) {
-                    out.println("LIST"); //TODO return filenames saved on this dstore
-                }
                 if (command.equals("STORE")) {
                     String filename = args[1];
                     String filesize = args[2];
@@ -93,16 +112,23 @@ public class Dstore {
                     PrintWriter informController = new PrintWriter(controller.getOutputStream());
                     informController.println("STORE_ACK "+filename);
                 }
+                else if (command.equals("LOAD_DATA")) {
+                    String filename = args[1];
+                    File folder = new File(file_folder);
+                    File[] listOfFiles = folder.listFiles();
+
+                    for(File file : listOfFiles){
+                        if(file.isFile() && file.getName().equals(filename)){
+
+                        }
+                    }
+                }
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
     }
 
-//        if(args[1].equals("put")){
-//            DONE
-//        } else
-//        if(args[1].equals("get")){
 //            File outputFile = new File(args[2]);
 //            FileOutputStream outf = new FileOutputStream(outputFile);
 //            try{
