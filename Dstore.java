@@ -35,31 +35,16 @@ public class Dstore {
             //The hello socket is socket of the controller
             controller = helloSocket;
 
-            BufferedReader in = new BufferedReader(
-                    new InputStreamReader(helloSocket.getInputStream()));
-            PrintWriter out = new PrintWriter(helloSocket.getOutputStream());
+            PrintWriter controllerOut = new PrintWriter(helloSocket.getOutputStream());
 
-            out.println("DSTORE " + port);
-            out.flush();
+            controllerOut.println("DSTORE " + port);
+            controllerOut.flush();
             System.out.println("[INFO]:Sending CONNECT " + port);
-//            ServerSocket ss = new ServerSocket(port);
+            ServerSocket ss = new ServerSocket(port);
             while(true){
                 try{
-//                    Socket client = ss.accept();
-//                    new Thread(new DStoreServiceThread(client)).start();
-                    for(int i=0;i<10;i++){
-                        out.println("LOAD test"); out.flush();
-                        System.out.println("TCP message "+i+" sent");
-                        Thread.sleep(1000);
-                        while(true){
-
-                            String line;
-                            while((line =in.readLine())!=null) {
-                                System.out.println(line);
-                            }
-                        }
-                    }
-
+                    Socket client = ss.accept();
+                    new Thread(new DStoreServiceThread(client)).start();
                 }
                 catch (Exception e){
                     System.out.println("[ERROR]:Issue while establishing connection with client");
@@ -94,10 +79,6 @@ public class Dstore {
                 System.out.println("Received:" + command);
                 PrintWriter out = new PrintWriter(client.getOutputStream());
 
-                if (command.equals("ACK")) {
-                    controller = client;
-                    System.out.println("[INFO]:Established connection with controller");
-                }
                 if (command.equals("STORE")) {
                     String filename = args[1];
                     String filesize = args[2];

@@ -1,10 +1,10 @@
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.security.KeyPair;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 
 public class Controller {
@@ -21,26 +21,25 @@ public class Controller {
     //Keeps a list of the ports of all connected dstores
     private static ArrayList<Integer> dstores;
 
-    //Keeps track of all files and their info
-//    private static ArrayList<FileStorage> storage;
-    private static Map<String, FileStorage> storage;
+    //Keeps track of all dstores and the files they store
+    private static HashMap<String, ArrayList<Integer>> storage;
 
-    private static String BLACK = "\u001B[30m";
-    private static String RED = "\u001B[31m";
-    private static String GREEN = "\u001B[32m";
-    private static String YELLOW = "\u001B[33m";
-    private static String BLUE = "\u001B[34m";
-    private static String PURPLE = "\u001B[35m";
-    private static String CYAN = "\u001B[36m";
-    private static String WHITE = "\u001B[37m";
+    private static final String BLACK = "\u001B[30m";
+    private static final String RED = "\u001B[31m";
+    private static final String GREEN = "\u001B[32m";
+    private static final String YELLOW = "\u001B[33m";
+    private static final String BLUE = "\u001B[34m";
+    private static final String PURPLE = "\u001B[35m";
+    private static final String CYAN = "\u001B[36m";
+    private static final String WHITE = "\u001B[37m";
 
     //Possible progress states
     private enum Progress{
         store_in_progress,
         store_complete,
         remove_in_progress,
-        remove_complete;
-    };
+        remove_complete
+    }
 
     //Used to indicate the progress of an operation
     private static HashMap<String,Progress> index;
@@ -55,28 +54,8 @@ public class Controller {
         timeout = Integer.parseInt(args[2]);
         rebalance_period = Integer.parseInt(args[3]);
 
-//        storage = new ArrayList<>();
         storage = new HashMap<>();
         dstores = new ArrayList<>();
-
-//        try {
-//
-//            Random random = new Random();
-//            for(int dstores=0; dstores<10; dstores++) {
-//                ArrayList<String> files1 = new ArrayList<>();
-//                int filesStored = random.nextInt(10);
-//                for (int files=0; files<filesStored; files++) {
-//                    files1.add("newFile:"+files+"_dstore:_"+dstores);
-//                    System.out.println("Added newFile: newFile:"+files+"_dstore:_"+dstores);
-//                }
-//                storage.put(new Socket("127.0.0.1", dstores), files1);
-//            }
-//            for (int i=0; i<storage.size(); i++){
-//                System.out.println("Socket "+i+" has size "+storage.get(i).size());
-//            }
-//        } catch (IOException e) {
-//            e.printStackTrace();
-//        }
 
         try{
             ServerSocket ss = new ServerSocket(cport);
@@ -84,7 +63,6 @@ public class Controller {
                 try{
                     System.out.println("Waiting for connection...");
                     Socket client = ss.accept();
-//                    ss.setSoTimeout(timeout);
                     new Thread(new FileServiceThread(client)).start();
                 } catch(Exception e){System.out.println("error1 "+e);}
             }
@@ -121,18 +99,17 @@ public class Controller {
 
     public static ArrayList<Integer> selectRDstores(){
         int i=0;
-        ArrayList<Integer>ports = new ArrayList<Integer>();
+        ArrayList<Integer>ports = new ArrayList<>();
         //Gets all dstores that are active and sorts them based on the number of files they contain
         //Finally it updates the storage object
 
-
-//        storage = storage.entrySet().stream()
-//                .filter(i1->dstores.contains(i1.getKey()))
-//                .sorted(Comparator.comparing(i1->i1.getValue().size()))
-//                .collect(Collectors.toMap(
-//                        Map.Entry::getKey,
-//                        Map.Entry::getValue,
-//                        (e1, e2) -> e1, HashMap::new));
+        storage = storage.entrySet().stream()
+                .filter(i1->dstores.contains(i1.getKey()))
+                .sorted(Comparator.comparing(i1->i1.getValue().size()))
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        Map.Entry::getValue,
+                        (e1, e2) -> e1, HashMap::new));
 //        for(Socket socket : dstores){
 //            if(i==R)
 //                break;
@@ -144,6 +121,7 @@ public class Controller {
     static class FileServiceThread implements Runnable {
         Socket client;
         CountDownLatch doneSignal;
+        int connectedPort;
 
         FileServiceThread(Socket c){
             client = c;
@@ -169,21 +147,13 @@ public class Controller {
                         if (command.equals("DSTORE")) {
 
                             int dstorePort = Integer.parseInt(args[1]);
+                            //Saving the port because when the socket is closed, we can't
+                            //ask for it (needed to delete dstore from dstores)
+                            this.connectedPort = dstorePort;
 
-                            //Adding new dstore in dstores array
+                             //Adding new dstore in dstores array
                             dstores.add(dstorePort);
 
-                            //Wait a little so that the connection goes live
-                            //                        Thread.sleep(5);
-
-                            //                        //Sending Acknowledgement message and opening a dedicated connection to dstore
-                            //                        Socket dstoreSocket = new Socket(client.getInetAddress(), Integer.parseInt(args[1]));
-                            //                        PrintWriter out = new PrintWriter(dstoreSocket.getOutputStream());
-                            //                        out.println("ACK");
-                            //                        out.flush();
-                            //                        System.out.println(BLUE+"[INFO]:Sending ACK");
-                            //                        System.out.println(GREEN+"[INFO]:Established connection with Dstore at port " + args[1]);
-                            //                        System.out.print(WHITE);
                         } else if (command.equals("STORE")) {
                             String filename = args[1];
                             Integer filesize = Integer.parseInt(args[2]);
@@ -198,8 +168,7 @@ public class Controller {
                             index.put(filename, Progress.store_in_progress);
 
                             //Adding file to the storage
-                            FileStorage file = new FileStorage(filesize, new ArrayList<>());
-                            storage.put(filename, file);
+                            storage.put(filename,new ArrayList<>());
 
                             //If there are not enough DStores (less than R), notify client
                             if (dstores.size() < R) {
@@ -211,8 +180,10 @@ public class Controller {
                             ArrayList<Integer> ports = selectRDstores();
                             out.println("STORE_TO " + getString(ports));
                             out.flush();
+
+                            //Gives timeout number of milliseconds to all R dstores to respond with an ACK
                             doneSignal = new CountDownLatch(R);
-                            doneSignal.await(timeout, TimeUnit.MICROSECONDS);
+                            doneSignal.await(timeout, TimeUnit.MILLISECONDS);
                         } else if (command.equals("STORE_ACK")) {
                             String filename = args[1];
 
@@ -220,8 +191,7 @@ public class Controller {
                             assert (!storage.isEmpty());
 
                             //Adding dstore to the list of dstores that contain the file
-                            var fStore = storage.get(filename);
-                            fStore.addDstores(client);
+                            storage.get(filename).add(this.connectedPort);
 
                             //Decrease doneSignal counter
                             doneSignal.countDown();
@@ -234,8 +204,8 @@ public class Controller {
                             }
                         } else if (command.equals("LOAD")) {
                             String filename = args[1];
-                            //                        Socket port1 = storage.get(filename).getDstores().get(0);
-                            //                        responseWriter.println("LOAD_FROM "+port1.getPort());
+//                            Socket port1 = storage.get(filename).getDstores().get(0);
+//                            responseWriter.println("LOAD_FROM "+port1.getPort());
 
                         } else if (command.equals("LIST")) {
                             //                        out.println("LIST"); //TODO return filenames saved on this dstore
@@ -245,20 +215,18 @@ public class Controller {
                     }
                     client.close();
                 }
+                //Logging connection drop
                 System.out.println("[INFO]:Connection with client at port "+client.getPort()+" was dropped");
-                for(Integer socket : dstores){
-                    System.out.println("Checking dstore "+socket+" against "+client.getPort());
-                    if(socket.equals(client.getPort())){
-                        dstores.remove(client);
-                        System.out.println(dstores.size());
+
+                //Removing dstore from dstores if connection is dropped
+                for(Integer dstorePort : dstores){
+                    if(dstorePort==this.connectedPort){
+                        dstores.remove(dstorePort);
                         break;
                     }
                 }
-            } catch (IOException ex) {
-                //Removing dstore from dstores if connection is dropped
-
-            } catch (InterruptedException e) {
-                e.printStackTrace();
+            } catch (Exception ex) {
+                ex.printStackTrace();
             }
         }
 
@@ -329,30 +297,4 @@ public class Controller {
 //            } catch (InterruptedException ex) {
 //                ex.printStackTrace();
 //            }
-
-
-
-class FileStorage {
-    private int size;
-    private ArrayList<Socket> dstores;
-
-    public FileStorage(int size, ArrayList<Socket> dstores){
-        this.size = size;
-        this.dstores = dstores;
-    }
-
-    public int getSize() {
-        return size;
-    }
-    public void setSize(int size) {
-        this.size = size;
-    }
-
-    public ArrayList<Socket> getDstores() {
-        return dstores;
-    }
-    public void addDstores(Socket dstores) {
-        this.dstores.add(dstores);
-    }
-}
 
