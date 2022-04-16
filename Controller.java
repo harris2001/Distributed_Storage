@@ -128,7 +128,8 @@ public class Controller {
 
         FileServiceThread(Socket c){
             client = c;
-            System.out.println("[INFO]:Client "+client.getInetAddress()+" connected at port "+client.getPort());
+            System.out.println(GREEN+"[INFO]:Client "+client.getInetAddress()+" connected at port "+client.getPort());
+            System.out.print(WHITE);
         }
 
         @Override
@@ -147,6 +148,8 @@ public class Controller {
                         String[] args = line.split(" ");
                         String command = args[0];
 
+                        System.out.println(BLUE+"[INFO]:Received command "+line+" from client on port "+client.getPort());
+                        System.out.print(WHITE);
                         if (command.equals("DSTORE")) {
 
                             int dstorePort = Integer.parseInt(args[1]);
@@ -162,8 +165,7 @@ public class Controller {
                             Integer filesize = Integer.parseInt(args[2]);
                             //If file already exist, notify client
                             if (index.get(filename) != null) {
-                                out.println("ERROR_FILE_ALREADY_EXISTS");
-                                out.flush();
+                                send(out,"ERROR_FILE_ALREADY_EXISTS");
                                 continue;
                             }
 
@@ -175,13 +177,12 @@ public class Controller {
 
                             //If there are not enough DStores (less than R), notify client
                             if (dstores.size() < R) {
-                                out.println("ERROR_NOT_ENOUGH_DSTORES");
-                                out.flush();
+                                send(out,"ERROR_NOT_ENOUGH_DSTORES");
                                 continue;
                             }
                             //Sending the list of ports to the client
                             ArrayList<Integer> ports = selectRDstores();
-                            out.println("STORE_TO " + getString(ports));
+                            send(out,"STORE_TO " + getString(ports));
                             out.flush();
 
                             //Gives timeout number of milliseconds to all R dstores to respond with an ACK
@@ -203,32 +204,35 @@ public class Controller {
                                 //Change the index of the file to store_completed
                                 index.put(filename, Progress.store_complete);
                                 //Inform the client
-                                out.println("STORE_COMPLETED");
+                                send(out,"STORE_COMPLETED");
                             }
                         } else if (command.equals("LOAD")) {
                             String filename = args[1];
 
                             // If file doesn't exist or if it's still processed inform client
                             if (index.get(filename) == null || index.get(filename).equals(Progress.store_in_progress)) {
-                                out.println("ERROR_FILE_DOES_NOT_EXIST");
+                                send(out,"ERROR_FILE_DOES_NOT_EXIST");
                             }
 
                             //Choose first dstore from the list
                             Iterator<Integer>portIter = storage.keySet().iterator();
-
+                            boolean done = false;
                             while(portIter.hasNext()){
                                 for(String file : storage.get(portIter)){
                                     if(file.equals(filename)){
-                                        out.println("LOAD_FROM " + portIter.next() + " " + capacity.get(filename));
-                                        out.flush();
-                                        return;
+                                        send(out,"LOAD_FROM " + portIter.next() + " " + capacity.get(filename));
+                                        //Opeartion is done
+                                        done = true;
+                                        portIter = null;
+                                        break;
                                     }
                                 }
                             }
+                            if(done)
+                                continue;
 
                             //If there are no more dstores, inform client
-                            out.println("ERROR_NOT_ENOUGH_DSTORES");
-                            out.flush();
+                            send(out,"ERROR_NOT_ENOUGH_DSTORES");
 
                         } else if (command.equals("RELOAD")){
                             String filename = args[1];
@@ -241,40 +245,48 @@ public class Controller {
                                             storage.remove(portIter);
                                             continue;
                                         }
-                                        out.println("LOAD_FROM " + portIter.next() + " " + capacity.get(filename));
-                                        out.flush();
-                                        return;
+                                        send(out,"LOAD_FROM " + portIter.next() + " " + capacity.get(filename));
+                                        portIter = null;
+                                        break;
                                     }
                                 }
                             }
-                            out.println("ERROR_LOAD");
-                            out.flush();
+                            send(out,"ERROR_LOAD");
                         } else if (command.equals("LIST")) {
                             boolean any=false;
                             out.print("LIST");
+                            System.out.println(YELLOW+"[INFO]: Sending LIST");
                             if(index.isEmpty()){
                                 out.println();
                                 out.flush();
-                                return;
+                                System.out.print(WHITE);
+                                continue;
                             }
                             for(String name : index.keySet()){
                                 out.print(" "+name);
+                                System.out.println(" "+name);
                                 any=true;
                             }
+                            System.out.print(WHITE);
                             out.println("");
                             if(any)
                                 out.flush();
-                            else
+                            else{
+                                System.out.println(RED+"[WARNING]: Sending ERROR_NOT_ENOUGH_DSTORES");
+                                System.out.print(WHITE);
                                 out.println("ERROR_NOT_ENOUGH_DSTORES");
+                                out.flush();
+                            }
                         } else {
-                            System.out.println("[WARNING]: Command" + command + " not found");
+                            System.out.println(RED+"[WARNING]: Command" + command + " not found");
+                            System.out.print(WHITE);
                         }
                     }
                     client.close();
                 }
                 //Logging connection drop
-                System.out.println("[INFO]:Connection with client at port "+client.getPort()+" was dropped");
-
+                System.out.println(PURPLE+"[INFO]:Connection with client at port "+client.getPort()+" was dropped");
+                System.out.print(WHITE);
                 //Removing dstore from dstores if connection is dropped
                 for(Integer dstorePort : dstores){
                     if(dstorePort==this.connectedPort){
@@ -285,6 +297,12 @@ public class Controller {
             } catch (Exception ex) {
                 ex.printStackTrace();
             }
+        }
+
+        private void send(PrintWriter out, String message) {
+            out.println(message);
+            out.flush();
+            System.out.println(YELLOW+"[INFO]: Sending "+message);
         }
 
         private String getString(ArrayList<Integer> ports) {

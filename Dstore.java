@@ -1,9 +1,12 @@
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.sql.SQLOutput;
+import java.util.logging.FileHandler;
+import java.util.logging.Logger;
+
 
 public class Dstore {
 
@@ -27,16 +30,31 @@ public class Dstore {
     //Keep the dedicated socket with the controller
     protected static Socket controller;
 
+    //Used for logging
+    private static FileWriter fw;
+
     /**
      * The main function is called as soon as the Controller is started
      * @param args are the command line arguments passed in the Controller (Explanations bellow)
      */
-    public static void main(String[] args){
+    public static void main(String[] args) throws IOException {
         port = Integer.parseInt(args[0]);
         cport = Integer.parseInt(args[1]);
         timeout = Integer.parseInt(args[2]);
         file_folder = args[3];//Path.of(args[3]);
 
+        /**
+         * Defining logger
+         */
+        File logger = new File("logger.txt");
+        if (! logger.exists() && !logger.createNewFile())
+            throw new RuntimeException("Can't create logger.txt");
+
+        fw = new FileWriter(logger);
+
+        BufferedWriter bw = new BufferedWriter(fw);
+        bw.write("OK");
+        bw.close();
         /**
          * Establishing connection with the controller
          */
@@ -89,11 +107,12 @@ public class Dstore {
                 System.out.println("Received:" + command);
                 PrintWriter out = new PrintWriter(client.getOutputStream());
 
+                System.out.println(YELLOW+"[RECEIVED]: "+line);
                 if (command.equals("STORE")) {
                     String filename = args[1];
                     String filesize = args[2];
                     //Acknowledging readiness to receive file
-                    out.println("ACK");
+                    send(out,"ACK");
                     //Creating a new file with the given filename
                     File inputFile = new File(filename);
                     //Creating input one-way input stream with the connected client
@@ -101,7 +120,7 @@ public class Dstore {
                     fileIn.readNBytes(Integer.parseInt(filesize));
                     fileIn.close();
                     PrintWriter informController = new PrintWriter(controller.getOutputStream());
-                    informController.println("STORE_ACK "+filename);
+                    send(informController,"STORE_ACK "+filename);
                 }
                 else if (command.equals("LOAD_DATA")) {
                     String filename = args[1];
@@ -115,6 +134,19 @@ public class Dstore {
                     //If file doesn't exist => close the socket with the client
                     client.close();
                 }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        private void send(PrintWriter out, String message) {
+            out.println(message);
+            out.flush();
+            System.out.println("SENDING: "+message);
+            try {
+                BufferedWriter bw = new BufferedWriter(fw);
+                bw.write("SENDING: "+message);
+                bw.newLine();
+                bw.close();
             } catch (IOException e) {
                 e.printStackTrace();
             }
