@@ -1,0 +1,1 @@
+./Dstore1 & sleep 2 & ./Dstore2 & sleep 2 & ./Dstore3

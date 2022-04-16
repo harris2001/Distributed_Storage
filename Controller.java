@@ -6,8 +6,16 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-
 public class Controller {
+
+    private static final String BLACK = "\u001B[30m";
+    private static final String RED = "\u001B[31m";
+    private static final String GREEN = "\u001B[32m";
+    private static final String YELLOW = "\u001B[33m";
+    private static final String BLUE = "\u001B[34m";
+    private static final String PURPLE = "\u001B[35m";
+    private static final String CYAN = "\u001B[36m";
+    private static final String WHITE = "\u001B[37m";
 
     //Controller's listening port
     private static int cport;
@@ -22,16 +30,11 @@ public class Controller {
     private static ArrayList<Integer> dstores;
 
     //Keeps track of all dstores and the files they store
-    private static HashMap<String, ArrayList<Integer>> storage;
+    private static HashMap<Integer, ArrayList<String>> storage;
 
-    private static final String BLACK = "\u001B[30m";
-    private static final String RED = "\u001B[31m";
-    private static final String GREEN = "\u001B[32m";
-    private static final String YELLOW = "\u001B[33m";
-    private static final String BLUE = "\u001B[34m";
-    private static final String PURPLE = "\u001B[35m";
-    private static final String CYAN = "\u001B[36m";
-    private static final String WHITE = "\u001B[37m";
+    // Stores the files and the space
+    private static HashMap<String, Integer> capacity;
+
 
     //Possible progress states
     private enum Progress{
@@ -42,7 +45,7 @@ public class Controller {
     }
 
     //Used to indicate the progress of an operation
-    private static HashMap<String,Progress> index;
+    private static HashMap<String,Progress > index;
 
     /**
      * The main function is called as soon as the Controller is started
@@ -56,6 +59,9 @@ public class Controller {
 
         storage = new HashMap<>();
         dstores = new ArrayList<>();
+        capacity = new HashMap<>();
+        index = new HashMap<>();
+
 
         try{
             ServerSocket ss = new ServerSocket(cport);
@@ -70,16 +76,9 @@ public class Controller {
 
     }
 
-//    static ArrayList<String> listFiles(Socket socket){
-//        try {
-//            PrintWriter out = new PrintWriter(socket.getOutputStream());
-//            out.println("LIST");
-//            out.flush();
-//        } catch (IOException e) {
-//            System.out.println("[ERROR]:Can't list send LIST command");
-//            e.printStackTrace();
-//        }
-//        return null;
+//    static ArrayList<Integer> listFiles(String filename){
+//
+//        return ports;
 //    }
 
     /////////////////////////// TODO ///////////////////////////
@@ -98,8 +97,8 @@ public class Controller {
     ////////////////////////////////////////////////////////////
 
     public static ArrayList<Integer> selectRDstores(){
-        int i=0;
         ArrayList<Integer>ports = new ArrayList<>();
+
         //Gets all dstores that are active and sorts them based on the number of files they contain
         //Finally it updates the storage object
 
@@ -110,11 +109,15 @@ public class Controller {
                         Map.Entry::getKey,
                         Map.Entry::getValue,
                         (e1, e2) -> e1, HashMap::new));
-//        for(Socket socket : dstores){
-//            if(i==R)
-//                break;
-//            i++;
-//        }
+
+        Iterator<Integer>iter = storage.keySet().iterator();
+
+        int i=0;
+        while(iter.hasNext() && i<R){
+            ports.add(iter.next());
+            i++;
+        }
+
         return ports;
     }
 
@@ -167,8 +170,8 @@ public class Controller {
                             //Updating index
                             index.put(filename, Progress.store_in_progress);
 
-                            //Adding file to the storage
-                            storage.put(filename,new ArrayList<>());
+                            //Storing file and its capacity
+                            capacity.put(filename,filesize);
 
                             //If there are not enough DStores (less than R), notify client
                             if (dstores.size() < R) {
@@ -191,7 +194,7 @@ public class Controller {
                             assert (!storage.isEmpty());
 
                             //Adding dstore to the list of dstores that contain the file
-                            storage.get(filename).add(this.connectedPort);
+                            storage.get(this.connectedPort).add(filename);
 
                             //Decrease doneSignal counter
                             doneSignal.countDown();
@@ -204,11 +207,65 @@ public class Controller {
                             }
                         } else if (command.equals("LOAD")) {
                             String filename = args[1];
-//                            Socket port1 = storage.get(filename).getDstores().get(0);
-//                            responseWriter.println("LOAD_FROM "+port1.getPort());
 
+                            // If file doesn't exist or if it's still processed inform client
+                            if (index.get(filename) == null || index.get(filename).equals(Progress.store_in_progress)) {
+                                out.println("ERROR_FILE_DOES_NOT_EXIST");
+                            }
+
+                            //Choose first dstore from the list
+                            Iterator<Integer>portIter = storage.keySet().iterator();
+
+                            while(portIter.hasNext()){
+                                for(String file : storage.get(portIter)){
+                                    if(file.equals(filename)){
+                                        out.println("LOAD_FROM " + portIter.next() + " " + capacity.get(filename));
+                                        out.flush();
+                                        return;
+                                    }
+                                }
+                            }
+
+                            //If there are no more dstores, inform client
+                            out.println("ERROR_NOT_ENOUGH_DSTORES");
+                            out.flush();
+
+                        } else if (command.equals("RELOAD")){
+                            String filename = args[1];
+                            Iterator<Integer>portIter = storage.keySet().iterator();
+                            Boolean get=false;
+                            while(portIter.hasNext()){
+                                for(String file : storage.get(portIter)){
+                                    if(file.equals(filename)){
+                                        if(!get){
+                                            storage.remove(portIter);
+                                            continue;
+                                        }
+                                        out.println("LOAD_FROM " + portIter.next() + " " + capacity.get(filename));
+                                        out.flush();
+                                        return;
+                                    }
+                                }
+                            }
+                            out.println("ERROR_LOAD");
+                            out.flush();
                         } else if (command.equals("LIST")) {
-                            //                        out.println("LIST"); //TODO return filenames saved on this dstore
+                            boolean any=false;
+                            out.print("LIST");
+                            if(index.isEmpty()){
+                                out.println();
+                                out.flush();
+                                return;
+                            }
+                            for(String name : index.keySet()){
+                                out.print(" "+name);
+                                any=true;
+                            }
+                            out.println("");
+                            if(any)
+                                out.flush();
+                            else
+                                out.println("ERROR_NOT_ENOUGH_DSTORES");
                         } else {
                             System.out.println("[WARNING]: Command" + command + " not found");
                         }
@@ -239,62 +296,3 @@ public class Controller {
         }
     }
 }
-
-// For FTP transmissions
-
-                //            InputStream in = client.getInputStream();
-                //
-                //            System.out.println("Trying1");
-                //            byte[] buf = new byte[1000]; int buflen;
-                //            buflen=in.read(buf);
-                //            System.out.println("Trying");
-                //            String firstBuffer=new String(buf,0,buflen);
-                //            int firstSpace=firstBuffer.indexOf(" ");
-                //            String command=firstBuffer.substring(0,firstSpace);
-                //            System.out.println("command "+command);
-                //            if(command.equals("put")){
-                //                int secondSpace=firstBuffer.indexOf(" ",firstSpace+1);
-                //                String fileName=
-                //                        firstBuffer.substring(firstSpace+1,secondSpace);
-                //                System.out.println("fileName "+fileName);
-                //                File outputFile = new File(fileName);
-                //                FileOutputStream out = new FileOutputStream(outputFile);
-                //                out.write(buf,secondSpace+1,buflen-secondSpace-1);
-                //                while ((buflen=in.read(buf)) != -1){
-                //                    System.out.print("*");
-                //                    out.write(buf,0,buflen);
-                //                }
-                //                in.close(); client.close(); out.close();
-                //            } else
-                //            if(command.equals("get")){
-                //                int secondSpace=firstBuffer.indexOf(" ",firstSpace+1);
-                //                String fileName=
-                //                        firstBuffer.substring(firstSpace+1,secondSpace);
-                //                System.out.println("fileName "+fileName);
-                //                File inputFile = new File(fileName);
-                //                FileInputStream inf = new FileInputStream(inputFile);
-                //                OutputStream out = client.getOutputStream();
-                //                out.write("FILE_FOUND".getBytes());
-                //                out.flush();
-                //                while ((buflen=inf.read(buf)) != -1){
-                //                    System.out.print("*");
-                //                    out.write(buf,0,buflen);
-                //                }
-                //                in.close(); inf.close(); client.close(); out.close();
-                //
-                //            } else
-                //                System.out.println("unrecognised command");
-//                }
-//            } catch (IOException e) {
-//            OutputStream out = null;
-//            try {
-//                out = client.getOutputStream();
-//                byte[] buf = "NOT_FOUND".getBytes();
-//                Thread.sleep(1000);
-//                out.write(buf);
-//            } catch (IOException ex) {
-//                ex.printStackTrace();
-//            } catch (InterruptedException ex) {
-//                ex.printStackTrace();
-//            }
-
