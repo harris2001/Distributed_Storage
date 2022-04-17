@@ -27,7 +27,7 @@ public class Controller {
     private static int rebalance_period;
 
     //Keeps a list of the ports of all connected dstores
-    private static ArrayList<Integer> dstores;
+    private static ArrayList<Socket> dstores;
 
     //Keeps track of all dstores and the files they store
     private static HashMap<Integer, ArrayList<String>> storage;
@@ -114,7 +114,16 @@ public class Controller {
 
         int i=0;
         while(iter.hasNext() && i<R){
+            System.out.println(RED+iter.next());
             ports.add(iter.next());
+            i++;
+        }
+        while(i<R){
+            for(Socket port: dstores){
+                if(!ports.contains(port.getPort())){
+                    ports.add(port.getPort());
+                }
+            }
             i++;
         }
 
@@ -157,8 +166,27 @@ public class Controller {
                             //ask for it (needed to delete dstore from dstores)
                             this.connectedPort = dstorePort;
 
-                             //Adding new dstore in dstores array
-                            dstores.add(dstorePort);
+                            Thread.sleep(500);
+                            //Sending Acknowledgement message and opening a dedicated connection to dstore
+
+                            Socket dstoreSocket = new Socket(client.getInetAddress(), dstorePort);
+                            PrintWriter dstoreOut = new PrintWriter(dstoreSocket.getOutputStream());
+
+                            dstoreOut.println("ACK_DSTORE");
+                            dstoreOut.flush();
+                            System.out.println("[INFO]:Sending ACK "+dstoreSocket.isClosed());
+                            System.out.println("[INFO]:Established connection with Dstore at port " + args[1]);
+
+                            BufferedReader dstoreIn = new BufferedReader(
+                                    new InputStreamReader(dstoreSocket.getInputStream()));
+                            String dstoreResp;
+                            while((dstoreResp = dstoreIn.readLine())!=null){
+                                System.out.println("RECEIVED "+dstoreResp);
+                            }
+
+                            //Adding new dstore in dstores array
+                            dstores.add(dstoreSocket);
+                            System.out.println("DSTORES: "+dstores.size());
 
                         } else if (command.equals("STORE")) {
                             String filename = args[1];
@@ -175,28 +203,36 @@ public class Controller {
                             //Storing file and its capacity
                             capacity.put(filename,filesize);
 
+                            //Sending the list of ports to the client
+                            ArrayList<Integer> ports = selectRDstores();
+
                             //If there are not enough DStores (less than R), notify client
-                            if (dstores.size() < R) {
+                            if(ports.size()<R){
                                 send(out,"ERROR_NOT_ENOUGH_DSTORES");
                                 continue;
                             }
-                            //Sending the list of ports to the client
-                            ArrayList<Integer> ports = selectRDstores();
+
+                            //Otherwise specify the ports to store the file to
                             send(out,"STORE_TO " + getString(ports));
                             out.flush();
 
                             //Gives timeout number of milliseconds to all R dstores to respond with an ACK
-                            doneSignal = new CountDownLatch(R);
+                                doneSignal = new CountDownLatch(R);
                             doneSignal.await(timeout, TimeUnit.MILLISECONDS);
                         } else if (command.equals("STORE_ACK")) {
                             String filename = args[1];
 
                             //Assuming that there are files in the storage
-                            assert (!storage.isEmpty());
+                            assert (!capacity.isEmpty());
 
                             //Adding dstore to the list of dstores that contain the file
-                            storage.get(this.connectedPort).add(filename);
-
+                            if(storage.get(this.connectedPort)==null){
+                                storage.put(this.connectedPort,new ArrayList<>());
+                                storage.get(this.connectedPort).add(filename);
+                            }
+                            else {
+                                storage.get(this.connectedPort).add(filename);
+                            }
                             //Decrease doneSignal counter
                             doneSignal.countDown();
                             //When store operations are performed by all R dstores
@@ -255,19 +291,19 @@ public class Controller {
                         } else if (command.equals("LIST")) {
                             boolean any=false;
                             out.print("LIST");
-                            System.out.println(YELLOW+"[INFO]: Sending LIST");
+                            System.out.print(YELLOW+"[INFO]: Sending LIST");
                             if(index.isEmpty()){
                                 out.println();
                                 out.flush();
-                                System.out.print(WHITE);
+                                System.out.println(WHITE);
                                 continue;
                             }
                             for(String name : index.keySet()){
                                 out.print(" "+name);
-                                System.out.println(" "+name);
+                                System.out.print(" "+name);
                                 any=true;
                             }
-                            System.out.print(WHITE);
+                            System.out.println(WHITE);
                             out.println("");
                             if(any)
                                 out.flush();
@@ -288,8 +324,8 @@ public class Controller {
                 System.out.println(PURPLE+"[INFO]:Connection with client at port "+client.getPort()+" was dropped");
                 System.out.print(WHITE);
                 //Removing dstore from dstores if connection is dropped
-                for(Integer dstorePort : dstores){
-                    if(dstorePort==this.connectedPort){
+                for(Socket dstorePort : dstores){
+                    if(dstorePort.getPort()==this.connectedPort){
                         dstores.remove(dstorePort);
                         break;
                     }

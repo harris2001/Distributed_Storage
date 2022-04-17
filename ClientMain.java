@@ -78,13 +78,13 @@ public class ClientMain {
 		Client client = null;
 		
 		try {
-			
+			System.out.println("::::::::::::::::::::::::::");
+
 			client = new Client(cport, timeout, Logger.LoggingType.ON_FILE_AND_TERMINAL);
 		
 			try { client.connect(); } catch(IOException e) { e.printStackTrace(); return; }
 			
 			try { list(client); } catch(IOException e) { e.printStackTrace(); }
-			
 			// store first file in the to_store folder twice, then store second file in the to_store folder once
 			File fileList[] = uploadFolder.listFiles();
 			if (fileList.length > 0) {

@@ -1,12 +1,8 @@
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.logging.FileHandler;
-import java.util.logging.Logger;
-
 
 public class Dstore {
 
@@ -31,7 +27,7 @@ public class Dstore {
     protected static Socket controller;
 
     //Used for logging
-    private static FileWriter fw;
+//    private static FileWriter fw;
 
     /**
      * The main function is called as soon as the Controller is started
@@ -46,40 +42,39 @@ public class Dstore {
         /**
          * Defining logger
          */
-        File logger = new File("logger.txt");
-        if (! logger.exists() && !logger.createNewFile())
-            throw new RuntimeException("Can't create logger.txt");
+//        File logger = new File("logger.txt");
+//        if (! logger.exists() && !logger.createNewFile())
+//            throw new RuntimeException("Can't create logger.txt");
 
-        fw = new FileWriter(logger);
+//        fw = new FileWriter(logger);
+//
+//        BufferedWriter bw = new BufferedWriter(fw);
+//        bw.write("OK");
+//        bw.close();
 
-        BufferedWriter bw = new BufferedWriter(fw);
-        bw.write("OK");
-        bw.close();
         /**
          * Establishing connection with the controller
          */
-        try {
-            Socket helloSocket = new Socket("127.0.0.1", cport);
-            //The hello socket is socket of the controller
-            controller = helloSocket;
+        Socket helloSocket = new Socket("127.0.0.1", cport);
+        PrintWriter controllerOut = new PrintWriter(helloSocket.getOutputStream());
 
-            PrintWriter controllerOut = new PrintWriter(helloSocket.getOutputStream());
-
-            controllerOut.println("DSTORE " + port);
-            controllerOut.flush();
-            System.out.println("[INFO]:Sending CONNECT " + port);
+        controllerOut.println("DSTORE " + port);
+        controllerOut.flush();
+        System.out.println("[INFO]:Sending CONNECT " + port);
+        try{
             ServerSocket ss = new ServerSocket(port);
-            while(true){
-                try{
-                    Socket client = ss.accept();
+            System.out.println("Opened server socket on port "+port);
+            for(;;){
+                try{Socket client = ss.accept();
                     new Thread(new DStoreServiceThread(client)).start();
                 }
-                catch (Exception e){
-                    System.out.println("[ERROR]:Issue while establishing connection with client");
-                    e.printStackTrace();
+                catch(Exception e){
+                    System.out.println("error::::::::::::::::::: "+e);
                 }
             }
-        } catch (IOException e) {
+        }
+        catch (Exception e){
+            System.out.println("[ERROR]:Issue while establishing connection with client");
             e.printStackTrace();
         }
     }
@@ -101,55 +96,68 @@ public class Dstore {
             try {
                 BufferedReader in = new BufferedReader(
                         new InputStreamReader(client.getInputStream()));
-                String line = in.readLine();
-                String[] args = line.split(" ");
-                String command = args[0];
-                System.out.println("Received:" + command);
                 PrintWriter out = new PrintWriter(client.getOutputStream());
+                String line;
+                while((line = in.readLine()) != null) {
+                    String[] args = line.split(" ");
+                    String command = args[0];
+                    System.out.println("Received:" + line);
+                    if (command.equals("ACK_DSTORE")) {
+                        controller = client;
+                        PrintWriter controllerOut = new PrintWriter(controller.getOutputStream());
+                        controllerOut.println("hello server");
+                        controllerOut.flush();
+                        System.out.println("[INFO]:Established connection with controller");
+                    }
+                    else if (command.equals("STORE")) {
+                        String filename = args[1];
+                        String filesize = args[2];
+                        //Acknowledging readiness to receive file
+                        out.println("ACK");
+                        out.flush();
+                        System.out.println(">>>>>>>>>>>>>>>>1");
+                        PrintWriter informController = new PrintWriter(controller.getOutputStream());
+                        send(informController,"STORE_ACK "+filename);
+                        System.out.println("<<<<<<<<<<<<<<<<"+controller.getPort());
+                        //Creating a new file with the given filename
+                        File inputFile = new File(filename);
+                        //Creating input one-way input stream with the connected client
+                        FileInputStream fileIn = new FileInputStream(inputFile);
+                        //Reading bytes from the client
+                        fileIn.readNBytes(Integer.parseInt(filesize));
+                        fileIn.close();
+                    }
+                    else if (command.equals("LOAD_DATA")) {
+                        String filename = args[1];
+                        File folder = new File(file_folder);
+                        File[] listOfFiles = folder.listFiles();
 
-                System.out.println(YELLOW+"[RECEIVED]: "+line);
-                if (command.equals("STORE")) {
-                    String filename = args[1];
-                    String filesize = args[2];
-                    //Acknowledging readiness to receive file
-                    send(out,"ACK");
-                    //Creating a new file with the given filename
-                    File inputFile = new File(filename);
-                    //Creating input one-way input stream with the connected client
-                    FileInputStream fileIn = new FileInputStream(inputFile);
-                    fileIn.readNBytes(Integer.parseInt(filesize));
-                    fileIn.close();
-                    PrintWriter informController = new PrintWriter(controller.getOutputStream());
-                    send(informController,"STORE_ACK "+filename);
-                }
-                else if (command.equals("LOAD_DATA")) {
-                    String filename = args[1];
-                    File folder = new File(file_folder);
-                    File[] listOfFiles = folder.listFiles();
+                        //Write file contents to a file called $filename
+                        FileOutputStream outf = new FileOutputStream(filename);
+                        outf.write(Files.readAllBytes(Path.of(filename)));
 
-                    //Write file contents to a file called $filename
-                    FileOutputStream outf = new FileOutputStream(filename);
-                    outf.write(Files.readAllBytes(Path.of(filename)));
-
-                    //If file doesn't exist => close the socket with the client
-                    client.close();
+                        //If file doesn't exist => close the socket with the client
+                        client.close();
+                    }
                 }
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
         private void send(PrintWriter out, String message) {
+            System.out.println("SENDING: "+message);
             out.println(message);
             out.flush();
-            System.out.println("SENDING: "+message);
-            try {
-                BufferedWriter bw = new BufferedWriter(fw);
-                bw.write("SENDING: "+message);
-                bw.newLine();
-                bw.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+//            try {
+//                BufferedWriter bw = new BufferedWriter(fw);
+//                bw.write("SENDING: "+message);
+//                bw.newLine();
+//                bw.close();
+//            } catch (IOException e) {
+//                e.printStackTrace();
+//            }
         }
     }
 }
+//TODO: fix issue:
+//STORE_ACK is not send to the controller and file not saved locally by dstore
