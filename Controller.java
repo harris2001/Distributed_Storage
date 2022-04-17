@@ -177,6 +177,11 @@ public class Controller {
                             System.out.println("[INFO]:Sending ACK "+dstoreSocket.isClosed());
                             System.out.println("[INFO]:Established connection with Dstore at port " + args[1]);
 
+                            //Adding new dstore in dstores array
+                            dstores.add(dstoreSocket);
+                            System.out.println("DSTORES: "+dstores.size());
+
+                            //Creating buffered reader to listen to messages from dstore
                             BufferedReader dstoreIn = new BufferedReader(
                                     new InputStreamReader(dstoreSocket.getInputStream()));
                             String dstoreResp;
@@ -184,9 +189,6 @@ public class Controller {
                                 System.out.println("RECEIVED "+dstoreResp);
                             }
 
-                            //Adding new dstore in dstores array
-                            dstores.add(dstoreSocket);
-                            System.out.println("DSTORES: "+dstores.size());
 
                         } else if (command.equals("STORE")) {
                             String filename = args[1];

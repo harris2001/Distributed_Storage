@@ -37,7 +37,14 @@ public class Dstore {
         port = Integer.parseInt(args[0]);
         cport = Integer.parseInt(args[1]);
         timeout = Integer.parseInt(args[2]);
-        file_folder = args[3];//Path.of(args[3]);
+        file_folder = args[3];
+
+        File dir = new File(file_folder);
+
+        //If directory doesn't exist, mkdir
+        if(!dir.exists()){
+            dir.mkdir();
+        }
 
         /**
          * Defining logger
@@ -97,51 +104,60 @@ public class Dstore {
                 BufferedReader in = new BufferedReader(
                         new InputStreamReader(client.getInputStream()));
                 PrintWriter out = new PrintWriter(client.getOutputStream());
-                String line;
-                while((line = in.readLine()) != null) {
-                    String[] args = line.split(" ");
-                    String command = args[0];
-                    System.out.println("Received:" + line);
-                    if (command.equals("ACK_DSTORE")) {
-                        controller = client;
-                        PrintWriter controllerOut = new PrintWriter(controller.getOutputStream());
-                        controllerOut.println("hello server");
-                        controllerOut.flush();
-                        System.out.println("[INFO]:Established connection with controller");
-                    }
-                    else if (command.equals("STORE")) {
-                        String filename = args[1];
-                        String filesize = args[2];
-                        //Acknowledging readiness to receive file
-                        out.println("ACK");
-                        out.flush();
-                        System.out.println(">>>>>>>>>>>>>>>>1");
-                        PrintWriter informController = new PrintWriter(controller.getOutputStream());
-                        send(informController,"STORE_ACK "+filename);
-                        System.out.println("<<<<<<<<<<<<<<<<"+controller.getPort());
-                        //Creating a new file with the given filename
-                        File inputFile = new File(filename);
-                        //Creating input one-way input stream with the connected client
-                        FileInputStream fileIn = new FileInputStream(inputFile);
-                        //Reading bytes from the client
-                        fileIn.readNBytes(Integer.parseInt(filesize));
-                        fileIn.close();
-                    }
-                    else if (command.equals("LOAD_DATA")) {
-                        String filename = args[1];
-                        File folder = new File(file_folder);
-                        File[] listOfFiles = folder.listFiles();
+                String line = in.readLine();
 
-                        //Write file contents to a file called $filename
-                        FileOutputStream outf = new FileOutputStream(filename);
-                        outf.write(Files.readAllBytes(Path.of(filename)));
-
-                        //If file doesn't exist => close the socket with the client
-                        client.close();
-                    }
+                String[] args = line.split(" ");
+                String command = args[0];
+                System.out.println("Received:" + line);
+                if (command.equals("ACK_DSTORE")) {
+                    controller = client;
+                    PrintWriter controllerOut = new PrintWriter(controller.getOutputStream());
+                    controllerOut.println("hello server");
+                    controllerOut.flush();
+                    System.out.println("[INFO]:Established connection with controller");
                 }
-            } catch (IOException e) {
-                e.printStackTrace();
+                else if (command.equals("STORE")) {
+                    String filename = args[1];
+                    Integer filesize = Integer.parseInt(args[2]);
+
+                    //Acknowledging readiness to receive file
+                    out.println("ACK");
+                    out.flush();
+
+                    //Creating a new file with the given filename
+                    File outputFile = new File(file_folder,filename);
+
+                    //Create new file even if it exist
+                    outputFile.createNewFile();
+
+                    //Receiving data
+                    FileOutputStream fout = new FileOutputStream(outputFile);
+                    var file = client.getInputStream().readNBytes(filesize);
+
+                    //Writing data to file
+                    fout.write(file);
+
+                    //Sending store acknowledgement to controller
+                    PrintWriter informController = new PrintWriter(controller.getOutputStream());
+                    send(informController,"STORE_ACK "+filename);
+
+                }
+                else if (command.equals("LOAD_DATA")) {
+                    String filename = args[1];
+                    File folder = new File(file_folder);
+                    File[] listOfFiles = folder.listFiles();
+
+                    //Write file contents to a file called $filename
+                    FileOutputStream outf = new FileOutputStream(filename);
+                    outf.write(Files.readAllBytes(Path.of(filename)));
+
+                    //If file doesn't exist => close the socket with the client
+                    client.close();
+                }
+            } catch (FileNotFoundException ex) {
+                ex.printStackTrace();
+            } catch (IOException ex) {
+                ex.printStackTrace();
             }
         }
         private void send(PrintWriter out, String message) {

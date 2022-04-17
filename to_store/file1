@@ -1,1 +1,13 @@
 This is the first file that is to be stored and tested
+Also this is a new Line
+and another one
+!@%#^WE%R^&T$Y*P(IUO){P_}+|{
+
+
+}
+System.out.println("Trying to reach controller on port "+controller.getPort());
+                        PrintWriter informController = new PrintWriter(controller.getOutputStream());
+                        send(informController,"STORE_ACK "+filename);
+                        ""
+                        5774357357357357
+
