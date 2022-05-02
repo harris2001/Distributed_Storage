@@ -23,13 +23,13 @@ public class ClientMain {
 		testClient(cport, timeout, downloadFolder, uploadFolder);
 		
 		// launch a number of concurrent clients, each doing the same operations
-//		for (int i = 0; i < 10; i++) {
-//			new Thread() {
-//				public void run() {
-//					test2Client(cport, timeout, downloadFolder, uploadFolder);
-//				}
-//			}.start();
-//		}
+		for (int i = 0; i < 10; i++) {
+			new Thread() {
+				public void run() {
+					test2Client(cport, timeout, downloadFolder, uploadFolder);
+				}
+			}.start();
+		}
 	}
 	
 	public static void test2Client(int cport, int timeout, File downloadFolder, File uploadFolder) {
@@ -78,13 +78,13 @@ public class ClientMain {
 		Client client = null;
 		
 		try {
-			System.out.println("::::::::::::::::::::::::::");
-
+			
 			client = new Client(cport, timeout, Logger.LoggingType.ON_FILE_AND_TERMINAL);
 		
 			try { client.connect(); } catch(IOException e) { e.printStackTrace(); return; }
 			
 			try { list(client); } catch(IOException e) { e.printStackTrace(); }
+			
 			// store first file in the to_store folder twice, then store second file in the to_store folder once
 			File fileList[] = uploadFolder.listFiles();
 			if (fileList.length > 0) {
@@ -105,7 +105,8 @@ public class ClientMain {
 			if (list != null)
 				for (String filename : list)
 					try { client.remove(filename); } catch(IOException e) { e.printStackTrace(); }
-			try { client.remove(list[0]); } catch(IOException e) { e.printStackTrace(); }
+			if (list != null && list.length > 0)
+				try { client.remove(list[0]); } catch(IOException e) { e.printStackTrace(); }
 			
 			try { list(client); } catch(IOException e) { e.printStackTrace(); }
 			

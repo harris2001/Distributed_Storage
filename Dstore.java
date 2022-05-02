@@ -62,8 +62,8 @@ public class Dstore {
         /**
          * Establishing connection with the controller
          */
-        Socket helloSocket = new Socket("127.0.0.1", cport);
-        PrintWriter controllerOut = new PrintWriter(helloSocket.getOutputStream());
+        controller = new Socket("127.0.0.1", cport);
+        PrintWriter controllerOut = new PrintWriter(controller.getOutputStream());
 
         controllerOut.println("DSTORE " + port);
         controllerOut.flush();
@@ -110,10 +110,11 @@ public class Dstore {
                 String command = args[0];
                 System.out.println("Received:" + line);
                 if (command.equals("ACK_DSTORE")) {
-                    controller = client;
-                    PrintWriter controllerOut = new PrintWriter(controller.getOutputStream());
-                    controllerOut.println("hello server");
-                    controllerOut.flush();
+//                    controller = client;
+                    //Sending hello server message
+//                    PrintWriter controllerOut = new PrintWriter(controller.getOutputStream());
+//                    controllerOut.println("hello server");
+//                    controllerOut.flush();
                     System.out.println("[INFO]:Established connection with controller");
                 }
                 else if (command.equals("STORE")) {

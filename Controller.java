@@ -34,6 +34,7 @@ public class Controller {
 
     // Stores the files and the space
     private static HashMap<String, Integer> capacity;
+    private static CountDownLatch latch;
 
 
     //Possible progress states
@@ -74,6 +75,21 @@ public class Controller {
             }
         }catch(Exception e){System.out.println("error2 "+e);}
 
+    }
+
+    private static void newLatch(){
+        latch = new CountDownLatch(R);
+        System.out.println(WHITE+"[INFO]: New latch created");
+        boolean started = false;
+        try {
+            started = latch.await(timeout, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        if(!started){
+            System.out.println(RED+"[ISSUE]: Didn't received all "+R+" acknowledgements from Dstores in time");
+            System.out.print(WHITE);
+        }
     }
 
 //    static ArrayList<Integer> listFiles(String filename){
@@ -120,11 +136,11 @@ public class Controller {
         }
         while(i<R){
             for(Socket port: dstores){
-                if(!ports.contains(port.getPort())){
+                if(!ports.contains(port.getPort()) && i<R){
                     ports.add(port.getPort());
+                    i++;
                 }
             }
-            i++;
         }
 
         return ports;
@@ -132,7 +148,6 @@ public class Controller {
 
     static class FileServiceThread implements Runnable {
         Socket client;
-        CountDownLatch doneSignal;
         int connectedPort;
 
         FileServiceThread(Socket c){
@@ -166,7 +181,7 @@ public class Controller {
                             //ask for it (needed to delete dstore from dstores)
                             this.connectedPort = dstorePort;
 
-                            Thread.sleep(500);
+                            Thread.sleep(5);
                             //Sending Acknowledgement message and opening a dedicated connection to dstore
 
                             Socket dstoreSocket = new Socket(client.getInetAddress(), dstorePort);
@@ -174,7 +189,7 @@ public class Controller {
 
                             dstoreOut.println("ACK_DSTORE");
                             dstoreOut.flush();
-                            System.out.println("[INFO]:Sending ACK "+dstoreSocket.isClosed());
+                            System.out.println("[INFO]:Sending ACK");
                             System.out.println("[INFO]:Established connection with Dstore at port " + args[1]);
 
                             //Adding new dstore in dstores array
@@ -182,12 +197,12 @@ public class Controller {
                             System.out.println("DSTORES: "+dstores.size());
 
                             //Creating buffered reader to listen to messages from dstore
-                            BufferedReader dstoreIn = new BufferedReader(
-                                    new InputStreamReader(dstoreSocket.getInputStream()));
-                            String dstoreResp;
-                            while((dstoreResp = dstoreIn.readLine())!=null){
-                                System.out.println("RECEIVED "+dstoreResp);
-                            }
+//                            BufferedReader dstoreIn = new BufferedReader(
+//                                    new InputStreamReader(dstoreSocket.getInputStream()));
+//                            String dstoreResp;
+//                            while((dstoreResp = dstoreIn.readLine())!=null){
+//                                System.out.println("RECEIVED "+dstoreResp);
+//                            }
 
 
                         } else if (command.equals("STORE")) {
@@ -216,34 +231,43 @@ public class Controller {
 
                             //Otherwise specify the ports to store the file to
                             send(out,"STORE_TO " + getString(ports));
-                            out.flush();
 
                             //Gives timeout number of milliseconds to all R dstores to respond with an ACK
-                                doneSignal = new CountDownLatch(R);
-                            doneSignal.await(timeout, TimeUnit.MILLISECONDS);
+                            newLatch();
+
+                            //When store operations are performed by all R dstores
+                            if (latch.getCount() == 0) {
+                                //Change the index of the file to store_completed
+                                index.put(filename, Progress.store_complete);
+                                //Inform the client
+                                send(out,"STORE_COMPLETE");
+                            }
+
                         } else if (command.equals("STORE_ACK")) {
                             String filename = args[1];
 
                             //Assuming that there are files in the storage
                             assert (!capacity.isEmpty());
 
+
+                            ArrayList<String> files = new ArrayList<>();
                             //Adding dstore to the list of dstores that contain the file
                             if(storage.get(this.connectedPort)==null){
-                                storage.put(this.connectedPort,new ArrayList<>());
-                                storage.get(this.connectedPort).add(filename);
+                                files.add(filename);
+                                storage.put(this.connectedPort, files);
                             }
                             else {
-                                storage.get(this.connectedPort).add(filename);
+                                files = storage.get(this.connectedPort);
+                                files.add(filename);
+                                storage.replace(this.connectedPort,files);
                             }
-                            //Decrease doneSignal counter
-                            doneSignal.countDown();
-                            //When store operations are performed by all R dstores
-                            if (doneSignal.getCount() == 0) {
-                                //Change the index of the file to store_completed
-                                index.put(filename, Progress.store_complete);
-                                //Inform the client
-                                send(out,"STORE_COMPLETED");
-                            }
+                            System.out.println(GREEN+"STORAGE NEW CAPACITY: "+storage.size()+" New pair added: ("+filename+","+this.connectedPort+")");
+
+                            latch.countDown();
+
+                            System.out.println(latch.getCount()+" left");
+
+
                         } else if (command.equals("LOAD")) {
                             String filename = args[1];
 
@@ -256,6 +280,7 @@ public class Controller {
                             Iterator<Integer>portIter = storage.keySet().iterator();
                             boolean done = false;
                             while(portIter.hasNext()){
+                                System.out.println("Storage size: "+storage.get(portIter).size());
                                 for(String file : storage.get(portIter)){
                                     if(file.equals(filename)){
                                         send(out,"LOAD_FROM " + portIter.next() + " " + capacity.get(filename));
@@ -336,6 +361,22 @@ public class Controller {
                 ex.printStackTrace();
             }
         }
+
+//        private synchronized void decrease_count() {
+//            if(!flag){
+//                try {
+//                    this.wait();
+//                } catch (InterruptedException e) {
+//                    e.printStackTrace();
+//                }
+//            }
+//            flag = false;
+//            //Decrease doneSignal counter
+//            doneSignal.countDown();
+//            flag = true;
+//            this.notify();
+//            this.notify();
+//        }
 
         private void send(PrintWriter out, String message) {
             out.println(message);
