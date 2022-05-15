@@ -23,13 +23,13 @@ public class ClientMain {
 		testClient(cport, timeout, downloadFolder, uploadFolder);
 		
 		// launch a number of concurrent clients, each doing the same operations
-		for (int i = 0; i < 10; i++) {
-			new Thread() {
-				public void run() {
-					test2Client(cport, timeout, downloadFolder, uploadFolder);
-				}
-			}.start();
-		}
+//		for (int i = 0; i < 10; i++) {
+//			new Thread() {
+//				public void run() {
+//					test2Client(cport, timeout, downloadFolder, uploadFolder);
+//				}
+//			}.start();
+//		}
 	}
 	
 	public static void test2Client(int cport, int timeout, File downloadFolder, File uploadFolder) {
@@ -99,6 +99,7 @@ public class ClientMain {
 			try { list = list(client); } catch(IOException e) { e.printStackTrace(); }
 			
 			if (list != null)
+				System.out.println(">>>>>>>>>>>>>>>>>>>>>>");
 				for (String filename : list)
 					try { client.load(filename, downloadFolder); } catch(IOException e) { e.printStackTrace(); }
 			

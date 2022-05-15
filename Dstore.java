@@ -65,7 +65,7 @@ public class Dstore {
         controller = new Socket("127.0.0.1", cport);
         PrintWriter controllerOut = new PrintWriter(controller.getOutputStream());
 
-        controllerOut.println("DSTORE " + port);
+        controllerOut.println("JOIN " + port);
         controllerOut.flush();
         System.out.println("[INFO]:Sending CONNECT " + port);
         try{
@@ -73,6 +73,7 @@ public class Dstore {
             System.out.println("Opened server socket on port "+port);
             for(;;){
                 try{Socket client = ss.accept();
+                    ss.setSoTimeout(timeout);
                     new Thread(new DStoreServiceThread(client)).start();
                 }
                 catch(Exception e){
@@ -104,20 +105,15 @@ public class Dstore {
                 BufferedReader in = new BufferedReader(
                         new InputStreamReader(client.getInputStream()));
                 PrintWriter out = new PrintWriter(client.getOutputStream());
+                OutputStream outf = client.getOutputStream();
+
                 String line = in.readLine();
 
                 String[] args = line.split(" ");
                 String command = args[0];
                 System.out.println("Received:" + line);
-                if (command.equals("ACK_DSTORE")) {
-//                    controller = client;
-                    //Sending hello server message
-//                    PrintWriter controllerOut = new PrintWriter(controller.getOutputStream());
-//                    controllerOut.println("hello server");
-//                    controllerOut.flush();
-                    System.out.println("[INFO]:Established connection with controller");
-                }
-                else if (command.equals("STORE")) {
+
+                if (command.equals("STORE")) {
                     String filename = args[1];
                     Integer filesize = Integer.parseInt(args[2]);
 
@@ -140,18 +136,25 @@ public class Dstore {
 
                     //Sending store acknowledgement to controller
                     PrintWriter informController = new PrintWriter(controller.getOutputStream());
+//                    Thread.sleep(2000);
                     send(informController,"STORE_ACK "+filename);
 
                 }
                 else if (command.equals("LOAD_DATA")) {
                     String filename = args[1];
                     File folder = new File(file_folder);
+
                     File[] listOfFiles = folder.listFiles();
-
-                    //Write file contents to a file called $filename
-                    FileOutputStream outf = new FileOutputStream(filename);
-                    outf.write(Files.readAllBytes(Path.of(filename)));
-
+                    Thread.sleep(5000);
+                    for(File file : listOfFiles){
+                        if (file.getName().equals(filename)){
+                            //Send file contents to the client requesting them
+                            outf.write(Files.readAllBytes(Path.of(file.getAbsolutePath())));
+                            System.out.println("Sending file "+file.getName()+" to client on port "+client.getPort());
+                            client.close();
+                            break;
+                        }
+                    }
                     //If file doesn't exist => close the socket with the client
                     client.close();
                 }
@@ -159,6 +162,8 @@ public class Dstore {
                 ex.printStackTrace();
             } catch (IOException ex) {
                 ex.printStackTrace();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
             }
         }
         private void send(PrintWriter out, String message) {
@@ -176,5 +181,3 @@ public class Dstore {
         }
     }
 }
-//TODO: fix issue:
-//STORE_ACK is not send to the controller and file not saved locally by dstore
