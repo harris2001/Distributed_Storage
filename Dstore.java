@@ -3,6 +3,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 
 public class Dstore {
 
@@ -77,7 +78,7 @@ public class Dstore {
                     new Thread(new DStoreServiceThread(client)).start();
                 }
                 catch(Exception e){
-                    System.out.println("error::::::::::::::::::: "+e);
+//                    System.out.println("error::::::::::::::::::: "+e);
                 }
             }
         }
@@ -145,7 +146,6 @@ public class Dstore {
                     File folder = new File(file_folder);
 
                     File[] listOfFiles = folder.listFiles();
-                    Thread.sleep(5000);
                     for(File file : listOfFiles){
                         if (file.getName().equals(filename)){
                             //Send file contents to the client requesting them
@@ -158,12 +158,30 @@ public class Dstore {
                     //If file doesn't exist => close the socket with the client
                     client.close();
                 }
+                else if (command.equals("REMOVE")){
+                    System.out.println("REMOVVVVVVVVVVEEEEEEEEEE");
+                    String filename = args[1];
+                    File folder = new File(file_folder);
+
+                    File[] listOfFiles = folder.listFiles();
+
+                    if(!Arrays.stream(listOfFiles).toList().contains(filename)){
+                        send(out,"ERROR_FILE_DOES_NOT_EXIST "+filename);
+                    }
+
+                    //Deleting the file from the list of files
+                    for(File file : listOfFiles){
+                        if(file.getName().equals(filename)){
+                            file.delete();
+                            send(out,"REMOVE_ACK "+filename);
+                            break;
+                        }
+                    }
+                }
             } catch (FileNotFoundException ex) {
                 ex.printStackTrace();
             } catch (IOException ex) {
                 ex.printStackTrace();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
             }
         }
         private void send(PrintWriter out, String message) {

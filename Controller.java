@@ -122,30 +122,49 @@ public class Controller {
         //Gets all dstores that are active and sorts them based on the number of files they contain
         //Finally it updates the storage object
 
-        storage = storage.entrySet().stream()
-                .filter(i1->dstores.containsKey(i1.getKey()))
+        System.out.println(">>>>>>>>>>>>>");
+        storage.entrySet().stream()
                 .sorted(Comparator.comparing(i1->i1.getValue().size()))
+                .forEach(i1-> System.out.println(RED+i1.getKey()+" "+i1.getValue()+WHITE));
+        System.out.println("<<<<<<<<<<<<<");
+
+        storage = storage.entrySet().stream()
+//                .filter(i1->dstores.containsKey(i1.getKey()))
+                .sorted(Comparator.comparing(i1->-i1.getValue().size()))
                 .collect(Collectors.toMap(
                         Map.Entry::getKey,
                         Map.Entry::getValue,
                         (e1, e2) -> e1, HashMap::new));
 
-        Iterator<Integer>iter = storage.keySet().iterator();
+
 
         int i=0;
-        while(iter.hasNext() && i<R){
-            System.out.println(RED+iter.next());
-            ports.add(iter.next());
-            i++;
-        }
         while(i<R){
             Iterator<HashMap<Integer,Socket>> it;
             for(Integer port: dstores.keySet()){
-                if(!ports.contains(port) && i<R){
+                if(!storage.keySet().contains(port) && i<R){
                     ports.add(port);
                     i++;
                 }
             }
+        }
+        Iterator<Integer>iter = storage.keySet().iterator();
+
+        // If more dstores are required, then select the ones the ones with the least files
+        while(iter.hasNext() && i<R){
+            int port = iter.next();
+            if(!ports.contains(port) && i<R){
+                System.out.println(RED+iter.next());
+                ports.add(port);
+                ports.add(iter.next());
+                i++;
+            }
+        }
+
+        try {
+            Thread.sleep(5000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
 
         return ports;
@@ -296,6 +315,13 @@ public class Controller {
 
                 case "LIST":
                     boolean any = false;
+
+                    //If there are not enough DStores (less than R), notify client
+                    if (dstores.size() < R) {
+                        send(out, "ERROR_NOT_ENOUGH_DSTORES");
+                        return;
+                    }
+
                     out.print("LIST");
                     System.out.print(YELLOW + "[INFO]: Sending LIST");
                     if (index.isEmpty()) {
@@ -345,6 +371,7 @@ public class Controller {
                                 //Cannot connect to Dstore => ignore
                                 e.printStackTrace();
                             }
+                            System.out.println(">>>>>>>>>>"+dstores.get(port).isClosed());
                             send(outDstore,"REMOVE "+filename);
                         }
                     }
