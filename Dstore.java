@@ -65,6 +65,7 @@ public class Dstore {
          */
         controller = new Socket("127.0.0.1", cport);
         PrintWriter controllerOut = new PrintWriter(controller.getOutputStream());
+        BufferedReader controllerIn = new BufferedReader(new InputStreamReader(controller.getInputStream()));
 
         controllerOut.println("JOIN " + port);
         controllerOut.flush();
@@ -72,19 +73,77 @@ public class Dstore {
         try{
             ServerSocket ss = new ServerSocket(port);
             System.out.println("Opened server socket on port "+port);
-            for(;;){
-                try{Socket client = ss.accept();
-                    ss.setSoTimeout(timeout);
-                    new Thread(new DStoreServiceThread(client)).start();
+            //Creating controller listening thread
+            new Thread(){
+                @Override
+                public void run() {
+                    try {
+                        super.run();
+                        String line;
+                        while (true) {
+                            try {
+                                if (!((line = controllerIn.readLine()) != null)) break;
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                                continue;
+                            }
+                            //Splitting request to command and arguments
+                            String[] com = line.split(" ");
+                            String command = com[0];
+
+                            System.out.println(BLUE + "[INFO]:Received command " + line + " from controller");
+                            System.out.print(WHITE);
+                            handleCommand(controller, command, com, controllerOut);
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
                 }
-                catch(Exception e){
-//                    System.out.println("error::::::::::::::::::: "+e);
+            }.start();
+
+            //Creating client listening thread
+            new Thread(){
+                @Override
+                public void run() {
+                    super.run();
+                    for (;;) {
+                        try {
+                            Socket client = ss.accept();
+                            ss.setSoTimeout(timeout);
+                            new Thread(new DStoreServiceThread(client)).start();
+                        } catch (Exception e) {
+                            //                    System.out.println("error::::::::::::::::::: "+e);
+                        }
+                    }
                 }
-            }
+            }.start();
         }
         catch (Exception e){
             System.out.println("[ERROR]:Issue while establishing connection with client");
             e.printStackTrace();
+        }
+    }
+
+    private static void handleCommand(Socket controller, String command, String[] args, PrintWriter controllerOut) {
+        switch (command){
+            case "REMOVE":
+                String filename = args[1];
+                File folder = new File(file_folder);
+
+                File[] listOfFiles = folder.listFiles();
+
+                if(!Arrays.stream(listOfFiles).toList().contains(filename)){
+                    send(controllerOut,"ERROR_FILE_DOES_NOT_EXIST "+filename);
+                }
+
+                //Deleting the file from the list of files
+                for(File file : listOfFiles){
+                    if(file.getName().equals(filename)){
+                        file.delete();
+                        send(controllerOut,"REMOVE_ACK "+filename);
+                        break;
+                    }
+                }
         }
     }
 
@@ -158,36 +217,17 @@ public class Dstore {
                     //If file doesn't exist => close the socket with the client
                     client.close();
                 }
-                else if (command.equals("REMOVE")){
-                    System.out.println("REMOVVVVVVVVVVEEEEEEEEEE");
-                    String filename = args[1];
-                    File folder = new File(file_folder);
-
-                    File[] listOfFiles = folder.listFiles();
-
-                    if(!Arrays.stream(listOfFiles).toList().contains(filename)){
-                        send(out,"ERROR_FILE_DOES_NOT_EXIST "+filename);
-                    }
-
-                    //Deleting the file from the list of files
-                    for(File file : listOfFiles){
-                        if(file.getName().equals(filename)){
-                            file.delete();
-                            send(out,"REMOVE_ACK "+filename);
-                            break;
-                        }
-                    }
-                }
             } catch (FileNotFoundException ex) {
                 ex.printStackTrace();
             } catch (IOException ex) {
                 ex.printStackTrace();
             }
         }
-        private void send(PrintWriter out, String message) {
-            System.out.println("SENDING: "+message);
-            out.println(message);
-            out.flush();
+    }
+    private static void send(PrintWriter out, String message) {
+        System.out.println("SENDING: "+message);
+        out.println(message);
+        out.flush();
 //            try {
 //                BufferedWriter bw = new BufferedWriter(fw);
 //                bw.write("SENDING: "+message);
@@ -196,6 +236,5 @@ public class Dstore {
 //            } catch (IOException e) {
 //                e.printStackTrace();
 //            }
-        }
     }
 }

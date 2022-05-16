@@ -119,55 +119,38 @@ public class Controller {
     public static ArrayList<Integer> selectRDstores(){
         ArrayList<Integer>ports = new ArrayList<>();
 
-        //Gets all dstores that are active and sorts them based on the number of files they contain
-        //Finally it updates the storage object
-
-        System.out.println(">>>>>>>>>>>>>");
-        storage.entrySet().stream()
-                .sorted(Comparator.comparing(i1->i1.getValue().size()))
-                .forEach(i1-> System.out.println(RED+i1.getKey()+" "+i1.getValue()+WHITE));
-        System.out.println("<<<<<<<<<<<<<");
-
-        storage = storage.entrySet().stream()
-//                .filter(i1->dstores.containsKey(i1.getKey()))
-                .sorted(Comparator.comparing(i1->-i1.getValue().size()))
-                .collect(Collectors.toMap(
-                        Map.Entry::getKey,
-                        Map.Entry::getValue,
-                        (e1, e2) -> e1, HashMap::new));
-
-
-
+        //Adding empty dstores to the list of available dstores
         int i=0;
-        while(i<R){
-            Iterator<HashMap<Integer,Socket>> it;
-            for(Integer port: dstores.keySet()){
-                if(!storage.keySet().contains(port) && i<R){
-                    ports.add(port);
-                    i++;
-                }
-            }
-        }
-        Iterator<Integer>iter = storage.keySet().iterator();
-
-        // If more dstores are required, then select the ones the ones with the least files
-        while(iter.hasNext() && i<R){
-            int port = iter.next();
-            if(!ports.contains(port) && i<R){
-                System.out.println(RED+iter.next());
+        for(Integer port: dstores.keySet()){
+            //If it's not in storage but it's still active add it
+            if(!storage.keySet().contains(port) && i<R){
                 ports.add(port);
-                ports.add(iter.next());
                 i++;
             }
         }
 
-        try {
-            Thread.sleep(5000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+        //Complete the list with the sorted list of dstores
+        storage.entrySet().stream()
+                //Get the active dstores
+                .filter(i1 -> dstores.containsKey(i1.getKey()))
+                //That are not contained in the ports list already
+                .filter(i1 -> !ports.contains(i1.getKey()))
+                //And sort them based on the amount of files they store
+                .sorted(Comparator.comparing(i1 -> i1.getValue().size()))
+                .forEach(i1 -> {
+                    int port = i1.getKey();
+                    System.out.println(RED + port + WHITE);
+                    ports.add(port);
+                });
+        //This is to be returned
+        ArrayList<Integer> res = new ArrayList<Integer>();
+        i = 0;
+        //Return only the first R dstores
+        while(i<R){
+            res.add(ports.get(i));
+            i++;
         }
-
-        return ports;
+        return res;
     }
 
     static class FileServiceThread implements Runnable {
@@ -367,12 +350,11 @@ public class Controller {
                             PrintWriter outDstore = null;
                             try {
                                 outDstore = new PrintWriter(dstores.get(port).getOutputStream());
+                                send(outDstore,"REMOVE "+filename);
                             } catch (IOException e) {
                                 //Cannot connect to Dstore => ignore
                                 e.printStackTrace();
                             }
-                            System.out.println(">>>>>>>>>>"+dstores.get(port).isClosed());
-                            send(outDstore,"REMOVE "+filename);
                         }
                     }
 

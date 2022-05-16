@@ -87,13 +87,22 @@ public class ClientMain {
 			
 			// store first file in the to_store folder twice, then store second file in the to_store folder once
 			File fileList[] = uploadFolder.listFiles();
-			if (fileList.length > 0) {
-				try { client.store(fileList[0]); } catch(IOException e) { e.printStackTrace(); }				
-				try { client.store(fileList[0]); } catch(IOException e) { e.printStackTrace(); }
+			System.out.println(":::::::::::::");
+			for(File f : fileList) {
+				System.out.println(">>>>>>>"+f.getName());
+				try {
+					client.store(f);
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
 			}
-			if (fileList.length > 1) {
-				try { client.store(fileList[1]); } catch(IOException e) { e.printStackTrace(); }
-			}
+//			if (fileList.length > 0) {
+//				try { client.store(fileList[0]); } catch(IOException e) { e.printStackTrace(); }
+//				try { client.store(fileList[0]); } catch(IOException e) { e.printStackTrace(); }
+//			}
+//			if (fileList.length > 1) {
+//				try { client.store(fileList[1]); } catch(IOException e) { e.printStackTrace(); }
+//			}
 
 			String list[] = null;
 			try { list = list(client); } catch(IOException e) { e.printStackTrace(); }
