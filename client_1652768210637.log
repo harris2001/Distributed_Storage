@@ -1,0 +1,348 @@
+Connection established to port 12345
+Message sent to port 12345: LIST
+List operation started
+Message received from port 12345: LIST
+List operation successfully completed
+Message sent to port 12345: STORE cipherrick.txt 1984
+Store operation started for file cipherrick.txt
+Message received from port 12345: STORE_TO 81 82 
+Controller replied to store cipherrick.txt in these Dstores: 81 82 
+Connection established to port 81
+Message sent to port 81: STORE cipherrick.txt 1984
+Storing file cipherrick.txt to Dstore 81
+Message received from port 81: ACK
+ACK received from Dstore 81 to store file cipherrick.txt
+Store of file cipherrick.txt to Dstore 81 successfully completed
+Connection established to port 82
+Message sent to port 82: STORE cipherrick.txt 1984
+Storing file cipherrick.txt to Dstore 82
+Message received from port 82: ACK
+ACK received from Dstore 82 to store file cipherrick.txt
+Store of file cipherrick.txt to Dstore 82 successfully completed
+Message received from port 12345: STORE_COMPLETE
+Store operation for file cipherrick.txt completed
+Message sent to port 12345: STORE cool_file1 0
+Store operation started for file cool_file1
+Message received from port 12345: STORE_TO 83 81 
+Controller replied to store cool_file1 in these Dstores: 83 81 
+Connection established to port 83
+Message sent to port 83: STORE cool_file1 0
+Storing file cool_file1 to Dstore 83
+Message received from port 83: ACK
+ACK received from Dstore 83 to store file cool_file1
+Store of file cool_file1 to Dstore 83 successfully completed
+Connection established to port 81
+Message sent to port 81: STORE cool_file1 0
+Storing file cool_file1 to Dstore 81
+Message received from port 81: ACK
+ACK received from Dstore 81 to store file cool_file1
+Store of file cool_file1 to Dstore 81 successfully completed
+Message received from port 12345: STORE_COMPLETE
+Store operation for file cool_file1 completed
+Message sent to port 12345: STORE cool_file2 0
+Store operation started for file cool_file2
+Message received from port 12345: STORE_TO 82 83 
+Controller replied to store cool_file2 in these Dstores: 82 83 
+Connection established to port 82
+Message sent to port 82: STORE cool_file2 0
+Storing file cool_file2 to Dstore 82
+Message received from port 82: ACK
+ACK received from Dstore 82 to store file cool_file2
+Store of file cool_file2 to Dstore 82 successfully completed
+Connection established to port 83
+Message sent to port 83: STORE cool_file2 0
+Storing file cool_file2 to Dstore 83
+Message received from port 83: ACK
+ACK received from Dstore 83 to store file cool_file2
+Store of file cool_file2 to Dstore 83 successfully completed
+Message received from port 12345: STORE_COMPLETE
+Store operation for file cool_file2 completed
+Message sent to port 12345: STORE MyrtleLang.png 61360
+Store operation started for file MyrtleLang.png
+Message received from port 12345: STORE_TO 81 82 
+Controller replied to store MyrtleLang.png in these Dstores: 81 82 
+Connection established to port 81
+Message sent to port 81: STORE MyrtleLang.png 61360
+Storing file MyrtleLang.png to Dstore 81
+Message received from port 81: ACK
+ACK received from Dstore 81 to store file MyrtleLang.png
+Store of file MyrtleLang.png to Dstore 81 successfully completed
+Connection established to port 82
+Message sent to port 82: STORE MyrtleLang.png 61360
+Storing file MyrtleLang.png to Dstore 82
+Message received from port 82: ACK
+ACK received from Dstore 82 to store file MyrtleLang.png
+Store of file MyrtleLang.png to Dstore 82 successfully completed
+Message received from port 12345: STORE_COMPLETE
+Store operation for file MyrtleLang.png completed
+Message sent to port 12345: STORE what 0
+Store operation started for file what
+Message received from port 12345: STORE_TO 83 81 
+Controller replied to store what in these Dstores: 83 81 
+Connection established to port 83
+Message sent to port 83: STORE what 0
+Storing file what to Dstore 83
+Message received from port 83: ACK
+ACK received from Dstore 83 to store file what
+Store of file what to Dstore 83 successfully completed
+Connection established to port 81
+Message sent to port 81: STORE what 0
+Storing file what to Dstore 81
+Message received from port 81: ACK
+ACK received from Dstore 81 to store file what
+Store of file what to Dstore 81 successfully completed
+Message received from port 12345: STORE_COMPLETE
+Store operation for file what completed
+Message sent to port 12345: LIST
+List operation started
+Message received from port 12345: LIST cool_file2 what MyrtleLang.png cipherrick.txt cool_file1
+List operation successfully completed
+Message sent to port 12345: LOAD cool_file2
+Load operation for file cool_file2 started
+Message received from port 12345: LOAD_FROM 82 0
+Controller replied to load file cool_file2 (size: 0 bytes) from Dstore 82
+Connection established to port 82
+Message sent to port 82: LOAD_DATA cool_file2
+Loading file cool_file2 from Dstore 82
+Load operation of file cool_file2 from Dstore 82 successfully completed
+Message sent to port 12345: LOAD what
+Load operation for file what started
+Message received from port 12345: LOAD_FROM 81 0
+Controller replied to load file what (size: 0 bytes) from Dstore 81
+Connection established to port 81
+Message sent to port 81: LOAD_DATA what
+Loading file what from Dstore 81
+Load operation of file what from Dstore 81 successfully completed
+Message sent to port 12345: LOAD MyrtleLang.png
+Load operation for file MyrtleLang.png started
+Message received from port 12345: LOAD_FROM 81 61360
+Controller replied to load file MyrtleLang.png (size: 61360 bytes) from Dstore 81
+Connection established to port 81
+Message sent to port 81: LOAD_DATA MyrtleLang.png
+Loading file MyrtleLang.png from Dstore 81
+Load operation of file MyrtleLang.png from Dstore 81 successfully completed
+Message sent to port 12345: LOAD cipherrick.txt
+Load operation for file cipherrick.txt started
+Message received from port 12345: LOAD_FROM 81 1984
+Controller replied to load file cipherrick.txt (size: 1984 bytes) from Dstore 81
+Connection established to port 81
+Message sent to port 81: LOAD_DATA cipherrick.txt
+Loading file cipherrick.txt from Dstore 81
+Load operation of file cipherrick.txt from Dstore 81 successfully completed
+Message sent to port 12345: LOAD cool_file1
+Load operation for file cool_file1 started
+Message received from port 12345: LOAD_FROM 81 0
+Controller replied to load file cool_file1 (size: 0 bytes) from Dstore 81
+Connection established to port 81
+Message sent to port 81: LOAD_DATA cool_file1
+Loading file cool_file1 from Dstore 81
+Load operation of file cool_file1 from Dstore 81 successfully completed
+Message sent to port 12345: REMOVE cool_file2
+Remove operation for file cool_file2 started
+Message received from port 12345: REMOVE_COMPLETE
+Remove operation for file cool_file2 successfully completed
+Message sent to port 12345: REMOVE what
+Remove operation for file what started
+Message received from port 12345: REMOVE_COMPLETE
+Remove operation for file what successfully completed
+Message sent to port 12345: REMOVE MyrtleLang.png
+Remove operation for file MyrtleLang.png started
+Message received from port 12345: REMOVE_COMPLETE
+Remove operation for file MyrtleLang.png successfully completed
+Message sent to port 12345: REMOVE cipherrick.txt
+Remove operation for file cipherrick.txt started
+Message received from port 12345: REMOVE_COMPLETE
+Remove operation for file cipherrick.txt successfully completed
+Message sent to port 12345: REMOVE cool_file1
+Remove operation for file cool_file1 started
+Message received from port 12345: REMOVE_COMPLETE
+Remove operation for file cool_file1 successfully completed
+Message sent to port 12345: REMOVE cool_file2
+Remove operation for file cool_file2 started
+Message received from port 12345: ERROR_FILE_DOES_NOT_EXIST
+Remove operation failed because file does not exist (filename: cool_file2)
+Message sent to port 12345: LIST
+List operation started
+Message received from port 12345: ERROR_FILE_DOES_NOT_EXIST
+ERROR: Connection closed by the Controller
+List operation failed
+Connection established to port 12345
+Connection established to port 12345
+Connection established to port 12345
+Connection established to port 12345
+Connection established to port 12345
+Connection established to port 12345
+Connection established to port 12345
+Message sent to port 12345: STORE cool_file2 0
+Message sent to port 12345: STORE cool_file1 0
+Store operation started for file cool_file2
+Message sent to port 12345: STORE cool_file2 0
+Store operation started for file cool_file1
+Message sent to port 12345: STORE cool_file2 0
+Store operation started for file cool_file2
+Message received from port 12345: ERROR_FILE_ALREADY_EXISTS
+Message sent to port 12345: STORE cool_file2 0
+Store operation started for file cool_file2
+Store operation started for file cool_file2
+Connection established to port 12345
+Connection established to port 12345
+File to store cool_file2 already exists in the data store
+Message sent to port 12345: STORE cipherrick.txt 1984
+Store operation started for file cipherrick.txt
+Message received from port 12345: ERROR_FILE_ALREADY_EXISTS
+File to store cool_file2 already exists in the data store
+Message received from port 12345: ERROR_FILE_ALREADY_EXISTS
+File to store cool_file2 already exists in the data store
+Message sent to port 12345: STORE what 0
+Message received from port 12345: ERROR_FILE_ALREADY_EXISTS
+File to store cool_file1 already exists in the data store
+Message sent to port 12345: STORE cool_file1 0
+Message sent to port 12345: STORE MyrtleLang.png 61360
+Message sent to port 12345: STORE cipherrick.txt 1984
+Store operation started for file cipherrick.txt
+Store operation started for file cool_file1
+Connection established to port 12345
+Message sent to port 12345: STORE cipherrick.txt 1984
+Store operation started for file cipherrick.txt
+Store operation started for file MyrtleLang.png
+Message sent to port 12345: STORE cool_file2 0
+Store operation started for file cool_file2
+Store operation started for file what
+Message sent to port 12345: STORE cool_file2 0
+Store operation started for file cool_file2
+Message received from port 12345: ERROR_FILE_ALREADY_EXISTS
+File to store cipherrick.txt already exists in the data store
+Message sent to port 12345: STORE cool_file2 0
+Store operation started for file cool_file2
+Message received from port 12345: ERROR_FILE_ALREADY_EXISTS
+Message sent to port 12345: LIST
+File to store what already exists in the data store
+List operation started
+Message sent to port 12345: LIST
+List operation started
+Message received from port 12345: ERROR_FILE_ALREADY_EXISTS
+File to store cool_file2 already exists in the data store
+Message received from port 12345: ERROR_FILE_ALREADY_EXISTS
+File to store cool_file2 already exists in the data store
+Message sent to port 12345: LIST
+List operation started
+Message sent to port 12345: STORE cool_file1 0
+Store operation started for file cool_file1
+Message received from port 12345: ERROR_FILE_ALREADY_EXISTS
+Message received from port 12345: ERROR_FILE_ALREADY_EXISTS
+File to store cipherrick.txt already exists in the data store
+File to store cool_file2 already exists in the data store
+Message sent to port 12345: STORE cipherrick.txt 1984
+Store operation started for file cipherrick.txt
+Message sent to port 12345: LIST
+List operation started
+Message received from port 12345: ERROR_FILE_ALREADY_EXISTS
+File to store cool_file1 already exists in the data store
+Message sent to port 12345: LIST
+List operation started
+Message received from port 12345: ERROR_FILE_ALREADY_EXISTS
+File to store cipherrick.txt already exists in the data store
+Message received from port 12345: ERROR_FILE_ALREADY_EXISTS
+File to store cipherrick.txt already exists in the data store
+Message received from port 12345: LIST
+Message sent to port 12345: STORE cipherrick.txt 1984
+List operation successfully completed
+Store operation started for file cipherrick.txt
+Message sent to port 12345: LIST
+List operation started
+Message received from port 12345: ERROR_NOT_ENOUGH_DSTORES
+Message received from port 12345: LIST
+ERROR: Not enough Dstores have joined the data store yet
+List operation successfully completed
+List operation failed
+Message sent to port 12345: LIST
+List operation started
+Message received from port 12345: ERROR_NOT_ENOUGH_DSTORES
+ERROR: Not enough Dstores have joined the data store yet
+List operation failed
+Message sent to port 12345: LIST
+List operation started
+Message received from port 12345: ERROR_FILE_ALREADY_EXISTS
+File to store cipherrick.txt already exists in the data store
+Message sent to port 12345: LIST
+List operation started
+Message received from port 12345: LIST
+List operation successfully completed
+Message sent to port 12345: LIST
+List operation started
+Message received from port 12345: ERROR_NOT_ENOUGH_DSTORES
+ERROR: Not enough Dstores have joined the data store yet
+List operation failed
+Message received from port 12345: LIST
+List operation successfully completed
+Message sent to port 12345: LIST
+List operation started
+Message received from port 12345: ERROR_NOT_ENOUGH_DSTORES
+ERROR: Not enough Dstores have joined the data store yet
+Message received from port 12345: LIST
+List operation failed
+List operation successfully completed
+Message sent to port 12345: LIST
+List operation started
+Message received from port 12345: ERROR_NOT_ENOUGH_DSTORES
+ERROR: Not enough Dstores have joined the data store yet
+List operation failed
+Message received from port 12345: LIST
+List operation successfully completed
+Message received from port 12345: LIST
+List operation successfully completed
+Message sent to port 12345: LIST
+List operation started
+Message received from port 12345: ERROR_NOT_ENOUGH_DSTORES
+ERROR: Not enough Dstores have joined the data store yet
+List operation failed
+Message sent to port 12345: LIST
+List operation started
+Message received from port 12345: ERROR_NOT_ENOUGH_DSTORES
+ERROR: Not enough Dstores have joined the data store yet
+List operation failed
+Message received from port 12345: ERROR_FILE_ALREADY_EXISTS
+File to store MyrtleLang.png already exists in the data store
+Message received from port 12345: ERROR_FILE_ALREADY_EXISTS
+File to store cool_file2 already exists in the data store
+Message sent to port 12345: STORE cool_file2 0
+Store operation started for file cool_file2
+Message sent to port 12345: STORE cool_file1 0
+Store operation started for file cool_file1
+Message received from port 12345: ERROR_FILE_ALREADY_EXISTS
+File to store cool_file2 already exists in the data store
+Message sent to port 12345: LIST
+List operation started
+Message received from port 12345: ERROR_FILE_ALREADY_EXISTS
+File to store cool_file1 already exists in the data store
+Message sent to port 12345: LIST
+List operation started
+Message received from port 12345: ERROR_FILE_ALREADY_EXISTS
+File to store cool_file1 already exists in the data store
+Message received from port 12345: LIST
+List operation successfully completed
+Message sent to port 12345: STORE MyrtleLang.png 61360
+Store operation started for file MyrtleLang.png
+Message sent to port 12345: LIST
+List operation started
+Message received from port 12345: ERROR_NOT_ENOUGH_DSTORES
+ERROR: Not enough Dstores have joined the data store yet
+List operation failed
+Message received from port 12345: LIST
+List operation successfully completed
+Message sent to port 12345: LIST
+List operation started
+Message received from port 12345: ERROR_NOT_ENOUGH_DSTORES
+ERROR: Not enough Dstores have joined the data store yet
+List operation failed
+Message received from port 12345: ERROR_FILE_ALREADY_EXISTS
+File to store MyrtleLang.png already exists in the data store
+Message sent to port 12345: LIST
+List operation started
+Message received from port 12345: LIST
+List operation successfully completed
+Message sent to port 12345: LIST
+List operation started
+Message received from port 12345: ERROR_NOT_ENOUGH_DSTORES
+ERROR: Not enough Dstores have joined the data store yet
+List operation failed

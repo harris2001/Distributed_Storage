@@ -1,12 +1,12 @@
+package comp2207.distributed.coursework;
+
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 import java.util.concurrent.ThreadLocalRandom;
-
 
 public class Controller {
 
@@ -38,7 +38,10 @@ public class Controller {
     private static HashMap<String, Integer> capacity;
 
     //Hashmap that stores the latches for each file
-    private static HashMap<String, CountDownLatch> latches;
+    private static HashMap<String, LatchSocketPair> latches;
+
+    //is true when the controller is performing operations and false when it stops
+    private static Boolean isActive;
 
 
     //Possible progress states
@@ -50,7 +53,7 @@ public class Controller {
     }
 
     //Used to indicate the progress of an operation
-    private static Map<Object, Object> index;
+    private static Map<String, Progress> index;
 
     /**
      * The main function is called as soon as the Controller is started
@@ -68,6 +71,7 @@ public class Controller {
         latches = new HashMap<>();
         index = Collections.synchronizedMap(new HashMap<>());
 
+        isActive = true;
 
         try{
             ServerSocket ss = new ServerSocket(cport);
@@ -82,12 +86,13 @@ public class Controller {
 
     }
 
-    private static void newLatch(String filename){
-        latches.put(filename, new CountDownLatch(R));
+    private static void newLatch(String filename,Socket client,PrintWriter out){
+        CountDownLatch latch = new CountDownLatch(R);
+        latches.put(filename, new LatchSocketPair(latch,out));
         System.out.println(WHITE+"[INFO]: New latch created");
         boolean started = false;
         try {
-            started = latches.get(filename).await(timeout, TimeUnit.MILLISECONDS);
+            started = latches.get(filename).getLatch().await(timeout, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
@@ -189,7 +194,7 @@ public class Controller {
             }
         }
 
-        private void handleRequest(Socket client, String command, String args[], PrintWriter out) {
+        private void handleRequest(Socket client, String command, String args[], PrintWriter out) throws IOException {
             switch (command) {
                 case "JOIN":
                     int dstorePort = Integer.parseInt(args[1]);
@@ -223,10 +228,10 @@ public class Controller {
                     send(out, "STORE_TO " + getString(ports));
 
                     //Gives timeout number of milliseconds to all R dstores to respond with an ACK
-                    newLatch(filename);
+                    newLatch(filename,client,out);
 
                     //When store operations are performed by all R dstores
-                    if (latches.get(filename).getCount() == 0) {
+                    if (latches.get(filename).getLatch().getCount() == 0) {
                         //Change the index of the file to store_completed
                         index.put(filename, Progress.store_complete);
                         //Inform the client
@@ -252,7 +257,7 @@ public class Controller {
                     }
                     System.out.println(GREEN + "STORAGE NEW CAPACITY: " + storage.size() + " New pair added: (" + filename + "," + this.connectedPort + ")");
 
-                    latches.get(filename).countDown();
+                    latches.get(filename).getLatch().countDown();
 
                     break;
                 case "LOAD":
@@ -301,11 +306,13 @@ public class Controller {
 
                     //If there are not enough DStores (less than R), notify client
                     if (dstores.size() < R) {
+                        System.out.println(RED+dstores.size()+" "+R+WHITE);
                         send(out, "ERROR_NOT_ENOUGH_DSTORES");
                         return;
                     }
 
                     out.print("LIST");
+
                     System.out.print(YELLOW + "[INFO]: Sending LIST");
                     if (index.isEmpty()) {
                         out.println();
@@ -313,17 +320,18 @@ public class Controller {
                         System.out.println(WHITE);
                         return;
                     }
-                    for (Object name : index.keySet()) {
-                        out.print(" " + name);
-                        System.out.print(" " + name);
-                        any = true;
+                    for (String name : index.keySet()) {
+                        if(index.get(name)==Progress.store_complete) {
+                            out.print(" " + name);
+                            System.out.print(" " + name);
+                            any = true;
+                        }
                     }
                     System.out.println(WHITE);
                     out.println("");
                     if (any) {
                         out.flush();
                     } else {
-                        System.out.println(RED + "[WARNING]: Sending ERROR_NOT_ENOUGH_DSTORES");
                         System.out.print(WHITE);
                         out.println("ERROR_NOT_ENOUGH_DSTORES");
                         out.flush();
@@ -359,10 +367,10 @@ public class Controller {
                     }
 
                     //Gives timeout number of milliseconds to all R dstores to respond with an ACK
-                    newLatch(filename);
+                    newLatch(filename,client,out);
 
                     //When remove operations are performed by all R dstores
-                    if (latches.get(filename).getCount() == 0) {
+                    if (latches.get(filename).getLatch().getCount() == 0) {
                         //Change the index of the file to remove_complete
                         index.put(filename, Progress.remove_complete);
                         //Inform the client
@@ -381,16 +389,18 @@ public class Controller {
                     System.out.println(GREEN + "STORAGE NEW CAPACITY: " + storage.size() + " New pair added: (" + filename + "," + this.connectedPort + ")");
 
                     //Counting down the latch for that file
-                    latches.get(filename).countDown();
+                    latches.get(filename).getLatch().countDown();
 
                     break;
                 case "ERROR_FILE_DOES_NOT_EXIST":
                     filename = args[1];
                     //if the Dstore doesn't have the file, then remove it from the storage ArrayList
                     storage.remove(dstores.get(client.getPort()),filename);
+                    PrintWriter outClient = new PrintWriter(latches.get(filename).getWriter());
+                    send(outClient,"ERROR_FILE_DOES_NOT_EXIST");
+                    break;
                 default:
-                    System.out.println(RED + "[WARNING]: Command" + command + " not found");
-                    System.out.print(WHITE);
+                    System.out.println(RED + "[WARNING]: Command " + command + " not found"+WHITE);
                     break;
             }
         }

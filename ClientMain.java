@@ -10,12 +10,12 @@ public class ClientMain {
 		int timeout = Integer.parseInt(args[1]);
 		
 		// this client expects a 'downloads' folder in the current directory; all files loaded from the store will be stored in this folder
-		File downloadFolder = new File("downloads");
+		File downloadFolder = new File("comp2207/distributed/coursework/downloads");
 		if (!downloadFolder.exists())
 			if (!downloadFolder.mkdir()) throw new RuntimeException("Cannot create download folder (folder absolute path: " + downloadFolder.getAbsolutePath() + ")");
 		
 		// this client expects a 'to_store' folder in the current directory; all files to be stored in the store will be collected from this folder
-		File uploadFolder = new File("to_store");
+		File uploadFolder = new File("comp2207/distributed/coursework/to_store");
 		if (!uploadFolder.exists())
 			throw new RuntimeException("to_store folder does not exist");
 		
@@ -23,13 +23,13 @@ public class ClientMain {
 		testClient(cport, timeout, downloadFolder, uploadFolder);
 		
 		// launch a number of concurrent clients, each doing the same operations
-//		for (int i = 0; i < 10; i++) {
-//			new Thread() {
-//				public void run() {
-//					test2Client(cport, timeout, downloadFolder, uploadFolder);
-//				}
-//			}.start();
-//		}
+		for (int i = 0; i < 10; i++) {
+			new Thread() {
+				public void run() {
+					test2Client(cport, timeout, downloadFolder, uploadFolder);
+				}
+			}.start();
+		}
 	}
 	
 	public static void test2Client(int cport, int timeout, File downloadFolder, File uploadFolder) {
@@ -87,7 +87,6 @@ public class ClientMain {
 			
 			// store first file in the to_store folder twice, then store second file in the to_store folder once
 			File fileList[] = uploadFolder.listFiles();
-			System.out.println(":::::::::::::");
 			for(File f : fileList) {
 				System.out.println(">>>>>>>"+f.getName());
 				try {

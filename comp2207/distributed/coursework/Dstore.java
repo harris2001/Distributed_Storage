@@ -1,3 +1,5 @@
+package comp2207.distributed.coursework;
+
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -132,18 +134,37 @@ public class Dstore {
 
                 File[] listOfFiles = folder.listFiles();
 
-                if(!Arrays.stream(listOfFiles).toList().contains(filename)){
+                //If for any reason the file doesn't exist on this dstore, let the controller know
+                if(!Arrays.stream(listOfFiles).map(f -> f.getName()).toList().contains(filename)){
                     send(controllerOut,"ERROR_FILE_DOES_NOT_EXIST "+filename);
                 }
 
                 //Deleting the file from the list of files
                 for(File file : listOfFiles){
                     if(file.getName().equals(filename)){
-                        file.delete();
-                        send(controllerOut,"REMOVE_ACK "+filename);
+                        send(controllerOut,"REMOVE_ACK "+file.getName());
+                        //Try to delete the file from the dstore
+                        try {
+                            Files.delete(Path.of(file.getAbsolutePath()));
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
                         break;
                     }
                 }
+
+                listOfFiles = folder.listFiles();
+
+                //Printing the revised list of files on this dstore
+                System.out.println("==============");
+                System.out.println("NEW FILE LIST:");
+                System.out.println("==============");
+                int ii = 0;
+                for (File f : listOfFiles){
+                    System.out.println("["+ii+"] "+f.getName());
+                    ii++;
+                }
+                System.out.println("--------------");
         }
     }
 
