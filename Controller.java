@@ -181,7 +181,7 @@ public class Controller {
         ArrayList<Integer> res = new ArrayList<Integer>();
         i = 0;
         //Return only the first R dstores
-        while(i<R){
+        while(i<R && ports.size()>i){
             res.add(ports.get(i));
             i++;
         }
@@ -251,7 +251,6 @@ public class Controller {
         private void handleRequest(Socket client, String command, String args[], PrintWriter out) throws IOException, InterruptedException {
             switch (command) {
                 case "JOIN":
-//                    rebalance.interrupt();
                     rebalance = new Rebalance(new Controller(), rebalance_period);
                     int dstorePort = Integer.parseInt(args[1]);
                     handleDstore(dstorePort);
@@ -320,7 +319,7 @@ public class Controller {
                     System.out.println(GREEN + "STORAGE NEW CAPACITY: " + storage.size() + " New pair added: (" + filename + "," + this.connectedPort + ")"+WHITE);
 
                     latches.get(filename).getLatch().countDown();
-                    System.out.println("QQQQQQ: "+latches.get(filename).getLatch().getCount());
+//                    System.out.println("QQQQQQ: "+latches.get(filename).getLatch().getCount());
 
                     break;
                 case "LOAD":

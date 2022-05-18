@@ -111,8 +111,10 @@ public class ClientMain {
 				for (String filename : list) {
 					try {
 						client.load(filename, downloadFolder);
-//						Thread.sleep(2000);
+						Thread.sleep(2);
 					} catch (IOException e) {
+						e.printStackTrace();
+					} catch (InterruptedException e) {
 						e.printStackTrace();
 					}
 				}
