@@ -1,5 +1,3 @@
-package comp2207.distributed.coursework;
-
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.net.Socket;

@@ -1,5 +1,3 @@
-package comp2207.distributed.coursework;
-
 import java.net.Socket;
 import java.util.ArrayList;
 

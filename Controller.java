@@ -1,38 +1,35 @@
-package comp2207.distributed.coursework;
-
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.*;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class Controller {
 
-    private static final String BLACK = "\u001B[30m";
-    private static final String RED = "\u001B[31m";
-    private static final String GREEN = "\u001B[32m";
-    private static final String YELLOW = "\u001B[33m";
-    private static final String BLUE = "\u001B[34m";
-    private static final String PURPLE = "\u001B[35m";
-    private static final String CYAN = "\u001B[36m";
-    private static final String WHITE = "\u001B[37m";
+    protected static final String BLACK = "\u001B[30m";
+    protected static final String RED = "\u001B[31m";
+    protected static final String GREEN = "\u001B[32m";
+    protected static final String YELLOW = "\u001B[33m";
+    protected static final String BLUE = "\u001B[34m";
+    protected static final String PURPLE = "\u001B[35m";
+    protected static final String CYAN = "\u001B[36m";
+    protected static final String WHITE = "\u001B[37m";
 
     //Controller's listening port
     private static int cport;
     //Replication factor for files
-    private static int R;
+    public static int R;
     //Failure detection timeout (in milliseconds)
     private static int timeout;
     //Period to start re-balance operation (in seconds)
     private static int rebalance_period;
 
     //Keeps a list of the ports of all connected dstores
-    private static HashMap<Integer,Socket> dstores;
+    protected static HashMap<Integer,Socket> dstores;
 
     //Keeps track of all dstores and the files they store
-    private static HashMap<Integer, ArrayList<String>> storage;
+    protected static HashMap<Integer, ArrayList<String>> storage;
 
     // Stores the files and the space
     private static HashMap<String, Integer> capacity;
@@ -40,9 +37,36 @@ public class Controller {
     //Hashmap that stores the latches for each file
     private static HashMap<String, LatchSocketPair> latches;
 
-    //is true when the controller is performing operations and false when it stops
-    private static Boolean isActive;
+    //This is a priority queue to save the incoming commands
+    private static Queue<String[]> commandsQueue;
 
+    //Rebalance thread
+    private static Rebalance rebalance;
+
+    //Is set to true when the rebalancing operator has the control
+    protected static AtomicBoolean isRebalancing = new AtomicBoolean(false);
+
+    public static ConcurrentLinkedQueue<Boolean> pendingOperations;
+
+
+//    private Controller instance = this;
+
+    public void rebalance_finished() {
+        System.out.println(RED+"<<<<<<<<<<<<<REBLANCE FINISHED"+WHITE);
+        synchronized (isRebalancing) {
+            isRebalancing.set(false);
+            isRebalancing.notifyAll();
+        }
+    }
+
+    public void rebalance() {
+        System.out.println(RED+">>>>>>>>>>>>>REBALANCING NOW"+WHITE);
+        synchronized (isRebalancing) {
+            isRebalancing.set(true);
+            System.out.println(GREEN+"Setting isRebalancing to true: "+isRebalancing.get()+WHITE);
+            isRebalancing.notifyAll();
+        }
+    }
 
     //Possible progress states
     private enum Progress{
@@ -60,6 +84,7 @@ public class Controller {
      * @param args are the command line arguments passed in the Controller (Explanations above)
      */
     public static void main(String[] args) {
+
         cport = Integer.parseInt(args[0]);
         R = Integer.parseInt(args[1]);
         timeout = Integer.parseInt(args[2]);
@@ -70,11 +95,14 @@ public class Controller {
         capacity = new HashMap<>();
         latches = new HashMap<>();
         index = Collections.synchronizedMap(new HashMap<>());
-
-        isActive = true;
+        commandsQueue = new LinkedList<>();
+        pendingOperations = new ConcurrentLinkedQueue<>();
 
         try{
             ServerSocket ss = new ServerSocket(cport);
+            rebalance = new Rebalance(new Controller(),rebalance_period);
+            rebalance.start();
+
             for(;;){
                 try{
                     System.out.println("Waiting for connection...");
@@ -86,7 +114,7 @@ public class Controller {
 
     }
 
-    private static void newLatch(String filename,Socket client,PrintWriter out){
+    private static void newLatch(String filename, Socket client, PrintWriter out){
         CountDownLatch latch = new CountDownLatch(R);
         latches.put(filename, new LatchSocketPair(latch,out));
         System.out.println(WHITE+"[INFO]: New latch created");
@@ -99,6 +127,7 @@ public class Controller {
         if(!started){
             System.out.println(RED+"[ISSUE]: Didn't received all "+R+" acknowledgements from Dstores in time");
             System.out.print(WHITE);
+            pendingOperations.poll();
         }
     }
 
@@ -130,6 +159,7 @@ public class Controller {
             //If it's not in storage but it's still active add it
             if(!storage.keySet().contains(port) && i<R){
                 ports.add(port);
+                System.out.println(RED + "Empty: " +port + WHITE);
                 i++;
             }
         }
@@ -144,7 +174,7 @@ public class Controller {
                 .sorted(Comparator.comparing(i1 -> i1.getValue().size()))
                 .forEach(i1 -> {
                     int port = i1.getKey();
-                    System.out.println(RED + port + WHITE);
+                    System.out.println(RED + ":::::::::::::::::" +port + WHITE);
                     ports.add(port);
                 });
         //This is to be returned
@@ -155,6 +185,7 @@ public class Controller {
             res.add(ports.get(i));
             i++;
         }
+
         return res;
     }
 
@@ -164,8 +195,7 @@ public class Controller {
 
         FileServiceThread(Socket c){
             client = c;
-            System.out.println(GREEN+"[INFO]:Client "+client.getInetAddress()+" connected at port "+client.getPort());
-            System.out.print(WHITE);
+            System.out.println(GREEN+"[INFO]:Client "+client.getInetAddress()+" connected at port "+client.getPort()+WHITE);
         }
 
         @Override
@@ -182,27 +212,58 @@ public class Controller {
 
                         //Splitting request to command and arguments
                         String[] args = line.split(" ");
-                        String command = args[0];
 
                         System.out.println(BLUE + "[INFO]:Received command " + line + " from client on port " + client.getPort());
                         System.out.print(WHITE);
-                        handleRequest(client, command, args, out);
+
+//                        handleRequest(client,args[0],args,out);
+                        //Adding command to the queue
+                        commandsQueue.add(args);
+
+                        synchronized (isRebalancing) {
+                            if (isRebalancing.get() == true) {
+                                System.out.println("Waiting");
+                                isRebalancing.wait();
+                            }
+                        }
+
+                            if (isRebalancing.get() == false) {
+                                while (!commandsQueue.isEmpty()) {
+                                    String[] top = commandsQueue.poll();
+                                    System.out.print(GREEN+"::::::::"+WHITE);
+                                    for (String s : top) {
+                                        System.out.print(RED + s + " ");
+                                    }
+                                    System.out.println(WHITE);
+                                    handleRequest(client, top[0], top, out);
+                                }
+                            }
+//                        }
                     }
                 }
             } catch (IOException e) {
                 e.printStackTrace();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
             }
         }
 
-        private void handleRequest(Socket client, String command, String args[], PrintWriter out) throws IOException {
+        private void handleRequest(Socket client, String command, String args[], PrintWriter out) throws IOException, InterruptedException {
             switch (command) {
                 case "JOIN":
+//                    rebalance.interrupt();
+                    rebalance = new Rebalance(new Controller(), rebalance_period);
                     int dstorePort = Integer.parseInt(args[1]);
                     handleDstore(dstorePort);
                     break;
                 case "STORE":
-                    String filename = args[1];
+                    String filename;
+                    //Controller gets the control
+                    pendingOperations.add(true);
+
+                    filename = args[1];
                     Integer filesize = Integer.parseInt(args[2]);
+
                     //If file already exist, notify client
                     if (index.get(filename) != null) {
                         send(out, "ERROR_FILE_ALREADY_EXISTS");
@@ -228,22 +289,23 @@ public class Controller {
                     send(out, "STORE_TO " + getString(ports));
 
                     //Gives timeout number of milliseconds to all R dstores to respond with an ACK
-                    newLatch(filename,client,out);
+                    newLatch(filename, client, out);
 
                     //When store operations are performed by all R dstores
                     if (latches.get(filename).getLatch().getCount() == 0) {
                         //Change the index of the file to store_completed
                         index.put(filename, Progress.store_complete);
                         //Inform the client
-                        send(out, "STORE_COMPLETE");
+                        send(out,"STORE_COMPLETE");
+
+                        //After the store is finished we remove the operation from the queue
+                        pendingOperations.poll();
                     }
                     break;
                 case "STORE_ACK":
                     filename = args[1];
-
                     //Assuming that there are files in the storage
                     assert (!capacity.isEmpty());
-
 
                     ArrayList<String> files = new ArrayList<>();
                     //Adding dstore to the list of dstores that contain the file
@@ -255,14 +317,14 @@ public class Controller {
                         files.add(filename);
                         storage.replace(this.connectedPort, files);
                     }
-                    System.out.println(GREEN + "STORAGE NEW CAPACITY: " + storage.size() + " New pair added: (" + filename + "," + this.connectedPort + ")");
+                    System.out.println(GREEN + "STORAGE NEW CAPACITY: " + storage.size() + " New pair added: (" + filename + "," + this.connectedPort + ")"+WHITE);
 
                     latches.get(filename).getLatch().countDown();
+                    System.out.println("QQQQQQ: "+latches.get(filename).getLatch().getCount());
 
                     break;
                 case "LOAD":
                     filename = args[1];
-
                     // If file doesn't exist or if it's still processed inform client
                     if (index.get(filename) == null || index.get(filename).equals(Progress.store_in_progress)) {
                         send(out, "ERROR_FILE_DOES_NOT_EXIST");
@@ -288,7 +350,6 @@ public class Controller {
 
                     //If there are no more dstores, inform client
                     send(out, "ERROR_NOT_ENOUGH_DSTORES");
-
                     break;
                 case "RELOAD":
                     filename = args[1];
@@ -303,10 +364,9 @@ public class Controller {
 
                 case "LIST":
                     boolean any = false;
-
                     //If there are not enough DStores (less than R), notify client
                     if (dstores.size() < R) {
-                        System.out.println(RED+dstores.size()+" "+R+WHITE);
+                        System.out.println(RED + dstores.size() + " " + R + WHITE);
                         send(out, "ERROR_NOT_ENOUGH_DSTORES");
                         return;
                     }
@@ -321,7 +381,7 @@ public class Controller {
                         return;
                     }
                     for (String name : index.keySet()) {
-                        if(index.get(name)==Progress.store_complete) {
+                        if (index.get(name) == Progress.store_complete) {
                             out.print(" " + name);
                             System.out.print(" " + name);
                             any = true;
@@ -338,7 +398,12 @@ public class Controller {
                     }
                     break;
                 case "REMOVE":
+                    pendingOperations.add(true);
+
                     filename = args[1];
+
+                    //Assuming that there are files in the storage
+                    assert (!capacity.isEmpty());
 
                     //If there are not enough DStores (less than R), notify client
                     if (dstores.size() < R) {
@@ -351,14 +416,14 @@ public class Controller {
                         send(out, "ERROR_FILE_DOES_NOT_EXIST");
                     }
 
-                    index.put(filename,Progress.remove_in_progress);
-                    for (int port : storage.keySet()){
+                    index.put(filename, Progress.remove_in_progress);
+                    for (int port : storage.keySet()) {
                         files = storage.get(port);
-                        if(files.contains(filename)){
+                        if (files.contains(filename)) {
                             PrintWriter outDstore = null;
                             try {
                                 outDstore = new PrintWriter(dstores.get(port).getOutputStream());
-                                send(outDstore,"REMOVE "+filename);
+                                send(outDstore, "REMOVE " + filename);
                             } catch (IOException e) {
                                 //Cannot connect to Dstore => ignore
                                 e.printStackTrace();
@@ -367,7 +432,7 @@ public class Controller {
                     }
 
                     //Gives timeout number of milliseconds to all R dstores to respond with an ACK
-                    newLatch(filename,client,out);
+                    newLatch(filename, client, out);
 
                     //When remove operations are performed by all R dstores
                     if (latches.get(filename).getLatch().getCount() == 0) {
@@ -375,6 +440,9 @@ public class Controller {
                         index.put(filename, Progress.remove_complete);
                         //Inform the client
                         send(out, "REMOVE_COMPLETE");
+
+                        //After the store is finished we're releasing the control
+                        pendingOperations.poll();
                     }
                     break;
                 case "REMOVE_ACK":
@@ -386,7 +454,7 @@ public class Controller {
                     //Removing the (dstore-file) association form the storage
                     storage.remove(this.connectedPort, filename);
 
-                    System.out.println(GREEN + "STORAGE NEW CAPACITY: " + storage.size() + " New pair added: (" + filename + "," + this.connectedPort + ")");
+                    System.out.println(GREEN + "STORAGE NEW CAPACITY: " + storage.size() + " New pair added: (" + filename + "," + this.connectedPort + ")"+WHITE);
 
                     //Counting down the latch for that file
                     latches.get(filename).getLatch().countDown();
@@ -395,12 +463,12 @@ public class Controller {
                 case "ERROR_FILE_DOES_NOT_EXIST":
                     filename = args[1];
                     //if the Dstore doesn't have the file, then remove it from the storage ArrayList
-                    storage.remove(dstores.get(client.getPort()),filename);
+                    storage.remove(dstores.get(client.getPort()), filename);
                     PrintWriter outClient = new PrintWriter(latches.get(filename).getWriter());
-                    send(outClient,"ERROR_FILE_DOES_NOT_EXIST");
+                    send(outClient, "ERROR_FILE_DOES_NOT_EXIST");
                     break;
                 default:
-                    System.out.println(RED + "[WARNING]: Command " + command + " not found"+WHITE);
+                    System.out.println(RED + "[WARNING]: Command " + command + " not found" + WHITE);
                     break;
             }
         }
@@ -432,7 +500,7 @@ public class Controller {
         private void send(PrintWriter out, String message) {
             out.println(message);
             out.flush();
-            System.out.println(YELLOW+"[INFO]: Sending "+message);
+            System.out.println(YELLOW+"[INFO]: Sending "+message+WHITE);
         }
 
         private String getString(ArrayList<Integer> ports) {

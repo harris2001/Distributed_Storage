@@ -1,5 +1,3 @@
-package comp2207.distributed.coursework;
-
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -217,7 +215,7 @@ public class Dstore {
 
                     //Sending store acknowledgement to controller
                     PrintWriter informController = new PrintWriter(controller.getOutputStream());
-//                    Thread.sleep(2000);
+                    Thread.sleep(50);
                     send(informController,"STORE_ACK "+filename);
 
                 }
@@ -242,6 +240,8 @@ public class Dstore {
                 ex.printStackTrace();
             } catch (IOException ex) {
                 ex.printStackTrace();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
             }
         }
     }
