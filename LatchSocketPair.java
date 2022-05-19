@@ -14,8 +14,9 @@ public class LatchSocketPair {
     }
 
     //Getters and setters
-    public void setLatch(CountDownLatch latch) {
+    public synchronized void setLatch(CountDownLatch latch) {
         this.latch = latch;
+        this.notify();
     }
 
     public void setSocket(PrintWriter out) {

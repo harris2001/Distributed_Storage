@@ -153,6 +153,7 @@ public class Controller {
                     System.out.println("Waiting for connection...");
                     Socket client = ss.accept();
                     new Thread(new FileServiceThread(client)).start();
+                    Thread.sleep(5);
                 } catch(Exception e){System.out.println("error1 "+e);}
             }
         }catch(Exception e){System.out.println("error2 "+e);}
@@ -162,12 +163,22 @@ public class Controller {
     private static void newLatch(String filename, PrintWriter out){
         CountDownLatch latch = new CountDownLatch(R);
         LatchSocketPair pair = new LatchSocketPair(latch,out);
-        latches.put(filename, pair);
-        System.out.println(WHITE+"[INFO]: New latch created");
+        //Explicitly stating the latch to notify the synchronized block bellow
+        pair.setLatch(latch);
+        synchronized(latches) {
+            latches.put(filename, pair);
+            latches.notify();
+        }
+        System.out.println(WHITE+"[INFO]: New latch created for file: "+filename);
         boolean started = false;
         try {
-            System.out.println(RED+"!!!!!!!!!!!"+latches.size());
-            started = latches.get(filename).getLatch().await(timeout, TimeUnit.MILLISECONDS);
+            System.out.println(RED+"!!!!!!!!!!!"+filename);
+            synchronized (latches) {
+                if(latches.get(filename)==null || latches.get(filename).getLatch()==null){
+                    latches.get(filename).wait();
+                }
+                started = latches.get(filename).getLatch().await(timeout, TimeUnit.MILLISECONDS);
+            }
         } catch (InterruptedException e) {
             pendingOperations.poll();
             e.printStackTrace();
@@ -310,7 +321,7 @@ public class Controller {
                     Integer filesize = Integer.parseInt(args[2]);
 
                     //If file already exist, notify client
-                    if (index.get(filename) != null) {
+                    if (index.containsKey(filename)) {
                         send(out, "ERROR_FILE_ALREADY_EXISTS");
                         pendingOperations.poll();
                         return;
@@ -366,7 +377,12 @@ public class Controller {
                     }
                     System.out.println(GREEN + "STORAGE NEW CAPACITY: " + storage.size() + " New pair added: (" + filename + "," + this.connectedPort + ")"+WHITE);
 
-                    latches.get(filename).getLatch().countDown();
+                    synchronized (latches) {
+                        if(latches.get(filename)==null || latches.get(filename).getLatch()==null){
+                            latches.get(filename).wait();
+                        }
+                        latches.get(filename).getLatch().countDown();
+                    }
 //                    System.out.println("QQQQQQ: "+latches.get(filename).getLatch().getCount());
 
                     break;
@@ -497,7 +513,12 @@ public class Controller {
                     System.out.println(GREEN + "STORAGE NEW CAPACITY: " + storage.size() + " New pair added: (" + filename + "," + this.connectedPort + ")"+WHITE);
 
                     //Counting down the latch for that file
-                    latches.get(filename).getLatch().countDown();
+                    synchronized (latches) {
+                        if(latches.get(filename)==null || latches.get(filename).getLatch()==null){
+                            latches.get(filename).wait();
+                        }
+                        latches.get(filename).getLatch().countDown();
+                    }
 
                     break;
                 case "ERROR_FILE_DOES_NOT_EXIST":
