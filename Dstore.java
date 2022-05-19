@@ -214,6 +214,7 @@ public class Dstore {
                 String command = args[0];
                 System.out.println("Received:" + line);
 
+                File dir = new File(file_folder);
                 if (command.equals("STORE")) {
                     String filename = args[1];
                     Integer filesize = Integer.parseInt(args[2]);
@@ -223,7 +224,7 @@ public class Dstore {
                     out.flush();
 
                     //Creating a new file with the given filename
-                    File outputFile = new File(file_folder,filename);
+                    File outputFile = new File(file_folder, filename);
 
                     //Create new file even if it exist
                     outputFile.createNewFile();
@@ -238,19 +239,29 @@ public class Dstore {
                     //Sending store acknowledgement to controller
                     PrintWriter informController = new PrintWriter(controller.getOutputStream());
                     Thread.sleep(50);
-                    send(informController,"STORE_ACK "+filename);
+                    send(informController, "STORE_ACK " + filename);
 
-                }
-                else if (command.equals("LOAD_DATA")) {
+                    File[] listOfFiles = dir.listFiles();
+
+                    //Printing the revised list of files on this dstore
+                    System.out.println("==============");
+                    System.out.println("NEW FILE LIST:");
+                    System.out.println("==============");
+                    int ii = 0;
+                    for (File f : listOfFiles) {
+                        System.out.println("[" + ii + "] " + f.getName());
+                        ii++;
+                    }
+                    System.out.println("--------------");
+                } else if (command.equals("LOAD_DATA")) {
                     String filename = args[1];
-                    File folder = new File(file_folder);
 
-                    File[] listOfFiles = folder.listFiles();
-                    for(File file : listOfFiles){
-                        if (file.getName().equals(filename)){
+                    File[] listOfFiles = dir.listFiles();
+                    for (File file : listOfFiles) {
+                        if (file.getName().equals(filename)) {
                             //Send file contents to the client requesting them
                             outf.write(Files.readAllBytes(Path.of(file.getAbsolutePath())));
-                            System.out.println("Sending file "+file.getName()+" to client on port "+client.getPort());
+                            System.out.println("Sending file " + file.getName() + " to client on port " + client.getPort());
                             client.close();
                             break;
                         }

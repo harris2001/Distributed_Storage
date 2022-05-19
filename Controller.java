@@ -73,31 +73,31 @@ public class Controller {
             Socket dstore = dstores.get(port);
             try {
                 System.out.println(port);
-                PrintWriter out = new PrintWriter(dstore.getOutputStream());
-                out.write("LIST");
+//                PrintWriter out = new PrintWriter(dstore.getOutputStream());
+//                out.write("LIST");
                 BufferedReader in = new BufferedReader(
                         new InputStreamReader(dstore.getInputStream()));
-
-                System.out.println(YELLOW+"[INFO]:Sending LIST command to dstore "+port+WHITE);
-                HashMap<Integer,ArrayList<String>>dstoreFiles = new HashMap<Integer, ArrayList<String>>();
-
-                //Reading request
-                String line;
-                while ((line = in.readLine()) != null) {
-
-                    //Splitting request to command and arguments
-                    String[] args = line.split(" ");
-                    if(args[0]=="LIST"){
-                        ArrayList<String> files = new ArrayList<>();
-                        for(int i=1; i<args.length; i++){
-                            files.add(args[i]);
-                        }
-                        dstoreFiles.put(port,files);
-                    }
-                    else{
-                        System.out.println(RED+"[ERROR]: Command "+line+" not found"+WHITE);
-                    }
-                }
+//
+//                System.out.println(YELLOW+"[INFO]:Sending LIST command to dstore "+port+WHITE);
+//                HashMap<Integer,ArrayList<String>>dstoreFiles = new HashMap<Integer, ArrayList<String>>();
+//
+//                //Reading request
+//                String line;
+//                while ((line = in.readLine()) != null) {
+//
+//                    //Splitting request to command and arguments
+//                    String[] args = line.split(" ");
+//                    if(args[0]=="LIST"){
+//                        ArrayList<String> files = new ArrayList<>();
+//                        for(int i=1; i<args.length; i++){
+//                            files.add(args[i]);
+//                        }
+//                        dstoreFiles.put(port,files);
+//                    }
+//                    else{
+//                        System.out.println(RED+"[ERROR]: Command "+line+" not found"+WHITE);
+//                    }
+//                }
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -184,29 +184,10 @@ public class Controller {
             e.printStackTrace();
         }
         if(!started){
-            System.out.println(RED+"[ISSUE]: Didn't received all "+R+" acknowledgements from Dstores in time"+WHITE);
+            System.out.println(RED+"[ISSUE]: Didn't received all "+R+" acknowledgements for "+filename+" from Dstores in time"+WHITE);
             pendingOperations.poll();
         }
     }
-
-//    static ArrayList<Integer> listFiles(String filename){
-//
-//        return ports;
-//    }
-
-    /////////////////////////// TODO ///////////////////////////
-//    private ArrayList<Integer> rebalancing(){
-//        ArrayList<Integer>ports = new ArrayList<Integer>();
-//
-//        for(Socket socket : dstores){
-//            int fileAdded = storage.get(socket).size()+1;
-//            int factor = R*F/dstores.size();
-//            if(fileAdded>=Math.floor(factor) && fileAdded<=Math.ceil(factor)){
-//                ports.add(socket.getPort());
-//        }
-//        return ports;
-//    }
-    ////////////////////////////////////////////////////////////
 
     public static ArrayList<Integer> selectRDstores(){
         ArrayList<Integer>ports = new ArrayList<>();
@@ -259,45 +240,52 @@ public class Controller {
         @Override
         public void run() {
             try {
-                while (!client.isClosed()) {
-                    BufferedReader in = new BufferedReader(
-                            new InputStreamReader(client.getInputStream()));
-                    PrintWriter out = new PrintWriter(client.getOutputStream());
+                BufferedReader in = new BufferedReader(
+                        new InputStreamReader(client.getInputStream()));
+                PrintWriter out = new PrintWriter(client.getOutputStream());
 
-                    //Reading request
-                    String line;
-                    while ((line = in.readLine()) != null) {
+                //Reading request
+                String line;
+                while ((line = in.readLine()) != null) {
 
-                        //Splitting request to command and arguments
-                        String[] args = line.split(" ");
+                    //Splitting request to command and arguments
+                    String[] args = line.split(" ");
 
-                        System.out.println(BLUE + "[INFO]:Received command " + line + " from client on port " + client.getPort()+WHITE);
+                    System.out.println(BLUE + "[INFO]:Received command " + line + " from client on port " + client.getPort()+WHITE);
 
 //                        handleRequest(client,args[0],args,out);
-                        //Adding command to the queue
-                        commandsQueue.add(args);
+                    //Adding command to the queue
+                    commandsQueue.add(args);
 
-                        synchronized (isRebalancing) {
-                            if (isRebalancing.get() == true) {
-                                System.out.println("Waiting");
-                                isRebalancing.wait();
-                            }
+                    synchronized (isRebalancing) {
+                        if (isRebalancing.get() == true) {
+                            System.out.println("Waiting");
+                            isRebalancing.wait();
                         }
+                    }
 
-                            if (isRebalancing.get() == false) {
-                                while (!commandsQueue.isEmpty()) {
-                                    String[] top = commandsQueue.poll();
-                                    String toPrint = GREEN+"::::::::"+RED;
-                                    for (String s : top) {
-                                        toPrint += " "+s;
-                                    }
-                                    System.out.println(toPrint+WHITE);
-                                    handleRequest(client, top[0], top, out);
-                                }
+                    if (isRebalancing.get() == false) {
+                        while (!commandsQueue.isEmpty()) {
+                            String[] top = commandsQueue.poll();
+                            String toPrint = GREEN+"::::::::"+RED;
+                            for (String s : top) {
+                                toPrint += " "+s;
                             }
-//                        }
+                            System.out.println(toPrint+WHITE);
+                            handleRequest(client, top[0], top, out);
+                        }
                     }
                 }
+
+                System.out.println("[INFO]:Connection with client at port "+client.getPort()+" was dropped");
+                for(Integer port : dstores.keySet()){
+                    Socket socket = dstores.get(port);
+                    if(Math.abs(socket.getPort()-client.getPort())<=0){
+                        dstores.remove(port);
+                        break;
+                    }
+                }
+                System.out.println("DSTORES: "+dstores.size());
             } catch (IOException e) {
                 e.printStackTrace();
             } catch (InterruptedException e) {
@@ -349,6 +337,7 @@ public class Controller {
                     //Gives timeout number of milliseconds to all R dstores to respond with an ACK
                     newLatch(filename, out);
 
+                    System.out.println(BLUE+filename+": {{{{{{{{{{{"+latches.get(filename).getLatch().getCount()+WHITE);
                     //When store operations are performed by all R dstores
                     if (latches.get(filename).getLatch().getCount() == 0) {
                         //Change the index of the file to store_completed
