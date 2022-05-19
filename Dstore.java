@@ -137,12 +137,22 @@ public class Dstore {
     }
 
     private static void handleCommand(Socket controller, String command, String[] args, PrintWriter controllerOut) {
+
+        File folder = new File(file_folder);
+
+        File[] listOfFiles = folder.listFiles();
+
         switch (command){
+            case "LIST":
+                String resp = "LIST";
+                for(File file : listOfFiles){
+                    resp += " "+file.getName();
+                }
+                send(controllerOut,resp);
+
+                break;
             case "REMOVE":
                 String filename = args[1];
-                File folder = new File(file_folder);
-
-                File[] listOfFiles = folder.listFiles();
 
                 //If for any reason the file doesn't exist on this dstore, let the controller know
                 if(!Arrays.stream(listOfFiles).map(f -> f.getName()).toList().contains(filename)){

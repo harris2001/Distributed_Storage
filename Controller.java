@@ -66,6 +66,51 @@ public class Controller {
             System.out.println(GREEN+"Setting isRebalancing to true: "+isRebalancing.get()+WHITE);
             isRebalancing.notifyAll();
         }
+
+        //Step1:
+        //Ask each dstore what files it stores
+        for (int port : dstores.keySet()){
+            Socket dstore = dstores.get(port);
+            try {
+                System.out.println(port);
+                PrintWriter out = new PrintWriter(dstore.getOutputStream());
+                out.write("LIST");
+                BufferedReader in = new BufferedReader(
+                        new InputStreamReader(dstore.getInputStream()));
+
+                System.out.println(YELLOW+"[INFO]:Sending LIST command to dstore "+port+WHITE);
+                HashMap<Integer,ArrayList<String>>dstoreFiles = new HashMap<Integer, ArrayList<String>>();
+
+                //Reading request
+                String line;
+                while ((line = in.readLine()) != null) {
+
+                    //Splitting request to command and arguments
+                    String[] args = line.split(" ");
+                    if(args[0]=="LIST"){
+                        ArrayList<String> files = new ArrayList<>();
+                        for(int i=1; i<args.length; i++){
+                            files.add(args[i]);
+                        }
+                        dstoreFiles.put(port,files);
+                    }
+                    else{
+                        System.out.println(RED+"[ERROR]: Command "+line+" not found"+WHITE);
+                    }
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        //Step2:
+        //Revise file allocation
+
+        //Step3:
+        //Tell each Dstore which files to send to other Dstores
+
+        //Step4:
+        //>>>>>>>Dstore Send/remove
     }
 
     //Possible progress states
@@ -114,19 +159,21 @@ public class Controller {
 
     }
 
-    private static void newLatch(String filename, Socket client, PrintWriter out){
+    private static void newLatch(String filename, PrintWriter out){
         CountDownLatch latch = new CountDownLatch(R);
-        latches.put(filename, new LatchSocketPair(latch,out));
+        LatchSocketPair pair = new LatchSocketPair(latch,out);
+        latches.put(filename, pair);
         System.out.println(WHITE+"[INFO]: New latch created");
         boolean started = false;
         try {
+            System.out.println(RED+"!!!!!!!!!!!"+latches.size());
             started = latches.get(filename).getLatch().await(timeout, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
+            pendingOperations.poll();
             e.printStackTrace();
         }
         if(!started){
-            System.out.println(RED+"[ISSUE]: Didn't received all "+R+" acknowledgements from Dstores in time");
-            System.out.print(WHITE);
+            System.out.println(RED+"[ISSUE]: Didn't received all "+R+" acknowledgements from Dstores in time"+WHITE);
             pendingOperations.poll();
         }
     }
@@ -213,8 +260,7 @@ public class Controller {
                         //Splitting request to command and arguments
                         String[] args = line.split(" ");
 
-                        System.out.println(BLUE + "[INFO]:Received command " + line + " from client on port " + client.getPort());
-                        System.out.print(WHITE);
+                        System.out.println(BLUE + "[INFO]:Received command " + line + " from client on port " + client.getPort()+WHITE);
 
 //                        handleRequest(client,args[0],args,out);
                         //Adding command to the queue
@@ -230,11 +276,11 @@ public class Controller {
                             if (isRebalancing.get() == false) {
                                 while (!commandsQueue.isEmpty()) {
                                     String[] top = commandsQueue.poll();
-                                    System.out.print(GREEN+"::::::::"+WHITE);
+                                    String toPrint = GREEN+"::::::::"+RED;
                                     for (String s : top) {
-                                        System.out.print(RED + s + " ");
+                                        toPrint += " "+s;
                                     }
-                                    System.out.println(WHITE);
+                                    System.out.println(toPrint+WHITE);
                                     handleRequest(client, top[0], top, out);
                                 }
                             }
@@ -266,6 +312,7 @@ public class Controller {
                     //If file already exist, notify client
                     if (index.get(filename) != null) {
                         send(out, "ERROR_FILE_ALREADY_EXISTS");
+                        pendingOperations.poll();
                         return;
                     }
 
@@ -281,6 +328,7 @@ public class Controller {
                     //If there are not enough DStores (less than R), notify client
                     if (ports.size() < R) {
                         send(out, "ERROR_NOT_ENOUGH_DSTORES");
+                        pendingOperations.poll();
                         return;
                     }
 
@@ -288,7 +336,7 @@ public class Controller {
                     send(out, "STORE_TO " + getString(ports));
 
                     //Gives timeout number of milliseconds to all R dstores to respond with an ACK
-                    newLatch(filename, client, out);
+                    newLatch(filename, out);
 
                     //When store operations are performed by all R dstores
                     if (latches.get(filename).getLatch().getCount() == 0) {
@@ -362,7 +410,6 @@ public class Controller {
                     break;
 
                 case "LIST":
-                    boolean any = false;
                     //If there are not enough DStores (less than R), notify client
                     if (dstores.size() < R) {
                         System.out.println(RED + dstores.size() + " " + R + WHITE);
@@ -372,29 +419,20 @@ public class Controller {
 
                     out.print("LIST");
 
-                    System.out.print(YELLOW + "[INFO]: Sending LIST");
+                    String resp = YELLOW + "[INFO]: Sending LIST";
                     if (index.isEmpty()) {
                         out.println();
                         out.flush();
-                        System.out.println(WHITE);
                         return;
                     }
                     for (String name : index.keySet()) {
                         if (index.get(name) == Progress.store_complete) {
                             out.print(" " + name);
-                            System.out.print(" " + name);
-                            any = true;
+                            resp += " " + name;
                         }
                     }
-                    System.out.println(WHITE);
+                    System.out.println(resp+WHITE);
                     out.println("");
-                    if (any) {
-                        out.flush();
-                    } else {
-                        System.out.print(WHITE);
-                        out.println("ERROR_NOT_ENOUGH_DSTORES");
-                        out.flush();
-                    }
                     break;
                 case "REMOVE":
                     pendingOperations.add(true);
@@ -407,12 +445,14 @@ public class Controller {
                     //If there are not enough DStores (less than R), notify client
                     if (dstores.size() < R) {
                         send(out, "ERROR_NOT_ENOUGH_DSTORES");
+                        pendingOperations.poll();
                         return;
                     }
 
                     // If file doesn't exist or if it's still processed inform client
                     if (index.get(filename) == null || index.get(filename).equals(Progress.store_in_progress)) {
                         send(out, "ERROR_FILE_DOES_NOT_EXIST");
+                        pendingOperations.poll();
                     }
 
                     index.put(filename, Progress.remove_in_progress);
@@ -424,6 +464,7 @@ public class Controller {
                                 outDstore = new PrintWriter(dstores.get(port).getOutputStream());
                                 send(outDstore, "REMOVE " + filename);
                             } catch (IOException e) {
+                                pendingOperations.poll();
                                 //Cannot connect to Dstore => ignore
                                 e.printStackTrace();
                             }
@@ -431,7 +472,7 @@ public class Controller {
                     }
 
                     //Gives timeout number of milliseconds to all R dstores to respond with an ACK
-                    newLatch(filename, client, out);
+                    newLatch(filename, out);
 
                     //When remove operations are performed by all R dstores
                     if (latches.get(filename).getLatch().getCount() == 0) {

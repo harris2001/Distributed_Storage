@@ -23,9 +23,9 @@ public class LatchSocketPair {
     }
 
     public CountDownLatch getLatch() {
-        return latch;
+        return this.latch;
     }
     public PrintWriter getWriter() {
-        return out;
+        return this.out;
     }
 }
