@@ -46,6 +46,18 @@ public class Dstore {
         if(!dir.exists()){
             dir.mkdir();
         }
+        else{
+            File[] listOfFiles = dir.listFiles();
+
+            //Deleting the file from the dstore directory
+            for(File file : listOfFiles){
+               try {
+                    Files.delete(Path.of(file.getAbsolutePath()));
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
 
         /**
          * Defining logger
