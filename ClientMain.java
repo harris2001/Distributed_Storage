@@ -70,8 +70,8 @@ public class ClientMain {
 		} catch(IOException e) {
 			e.printStackTrace();
 		} finally {
-//			if (client != null)
-//				try { client.disconnect(); } catch(Exception e) { e.printStackTrace(); }
+			if (client != null)
+				try { client.disconnect(); } catch(Exception e) { e.printStackTrace(); }
 		}
 	}
 	
@@ -128,8 +128,8 @@ public class ClientMain {
 			try { list(client); } catch(IOException e) { e.printStackTrace(); }
 			
 		} finally {
-//			if (client != null)
-//				try { client.disconnect(); } catch(Exception e) { e.printStackTrace(); }
+			if (client != null)
+				try { client.disconnect(); } catch(Exception e) { e.printStackTrace(); }
 		}
 	}
 

@@ -69,14 +69,14 @@ public class Controller {
 
         //Step1:
         //Ask each dstore what files it stores
-        for (int port : dstores.keySet()){
-            Socket dstore = dstores.get(port);
-            try {
-                System.out.println(port);
+//        for (int port : dstores.keySet()){
+//            Socket dstore = dstores.get(port);
+//            try {
+//                System.out.println(port);
 //                PrintWriter out = new PrintWriter(dstore.getOutputStream());
 //                out.write("LIST");
-                BufferedReader in = new BufferedReader(
-                        new InputStreamReader(dstore.getInputStream()));
+//                BufferedReader in = new BufferedReader(
+//                        new InputStreamReader(dstore.getInputStream()));
 //
 //                System.out.println(YELLOW+"[INFO]:Sending LIST command to dstore "+port+WHITE);
 //                HashMap<Integer,ArrayList<String>>dstoreFiles = new HashMap<Integer, ArrayList<String>>();
@@ -98,10 +98,11 @@ public class Controller {
 //                        System.out.println(RED+"[ERROR]: Command "+line+" not found"+WHITE);
 //                    }
 //                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
+//
+//            } catch (IOException e) {
+//                e.printStackTrace();
+//            }
+//        }
 
         //Step2:
         //Revise file allocation
@@ -153,7 +154,6 @@ public class Controller {
                     System.out.println("Waiting for connection...");
                     Socket client = ss.accept();
                     new Thread(new FileServiceThread(client)).start();
-                    Thread.sleep(5);
                 } catch(Exception e){System.out.println("error1 "+e);}
             }
         }catch(Exception e){System.out.println("error2 "+e);}
@@ -163,22 +163,13 @@ public class Controller {
     private static void newLatch(String filename, PrintWriter out){
         CountDownLatch latch = new CountDownLatch(R);
         LatchSocketPair pair = new LatchSocketPair(latch,out);
-        //Explicitly stating the latch to notify the synchronized block bellow
-        pair.setLatch(latch);
-        synchronized(latches) {
-            latches.put(filename, pair);
-            latches.notify();
-        }
+
+        latches.put(filename, pair);
+
         System.out.println(WHITE+"[INFO]: New latch created for file: "+filename);
         boolean started = false;
         try {
-            System.out.println(RED+"!!!!!!!!!!!"+filename);
-            synchronized (latches) {
-                if(latches.get(filename)==null || latches.get(filename).getLatch()==null){
-                    latches.get(filename).wait();
-                }
-                started = latches.get(filename).getLatch().await(timeout, TimeUnit.MILLISECONDS);
-            }
+            started = latches.get(filename).getLatch().await(timeout, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             pendingOperations.poll();
             e.printStackTrace();
@@ -267,7 +258,7 @@ public class Controller {
                     if (isRebalancing.get() == false) {
                         while (!commandsQueue.isEmpty()) {
                             String[] top = commandsQueue.poll();
-                            String toPrint = GREEN+"::::::::"+RED;
+                            String toPrint = RED+"::::::::";
                             for (String s : top) {
                                 toPrint += " "+s;
                             }
@@ -282,10 +273,10 @@ public class Controller {
                     Socket socket = dstores.get(port);
                     if(Math.abs(socket.getPort()-client.getPort())<=0){
                         dstores.remove(port);
+                        System.out.println("DSTORES: "+dstores.size());
                         break;
                     }
                 }
-                System.out.println("DSTORES: "+dstores.size());
             } catch (IOException e) {
                 e.printStackTrace();
             } catch (InterruptedException e) {
@@ -331,13 +322,40 @@ public class Controller {
                         return;
                     }
 
+//                    //Gives timeout number of milliseconds to all R dstores to respond with an ACK
+//                    newLatch(filename, out);
+                    CountDownLatch latch = new CountDownLatch(R);
+                    LatchSocketPair pair = new LatchSocketPair(latch,out);
+
+                    synchronized (latches) {
+                        latches.put(filename, pair);
+                        latches.notify();
+                    }
+
                     //Otherwise specify the ports to store the file to
                     send(out, "STORE_TO " + getString(ports));
 
-                    //Gives timeout number of milliseconds to all R dstores to respond with an ACK
-                    newLatch(filename, out);
+                    System.out.println(WHITE+"[INFO]: New latch created for file: "+filename);
+                    boolean started = false;
+                    try {
+                        //TODO
+                        synchronized (latches) {
+                            if(latches.get(filename)==null || latches.get(filename).getLatch()==null){
+                                latches.get(filename).wait();
+                            }
+                            latches.get(filename).getLatch().countDown();
+                        }
+                        started = latches.get(filename).getLatch().await(timeout, TimeUnit.MILLISECONDS);
+                    } catch (InterruptedException e) {
+                        pendingOperations.poll();
+                        e.printStackTrace();
+                    }
+                    if(!started){
+                        System.out.println(RED+"[ISSUE]: Didn't received all "+R+" acknowledgements for "+filename+" from Dstores in time"+WHITE);
+                        pendingOperations.poll();
+                    }
 
-                    System.out.println(BLUE+filename+": {{{{{{{{{{{"+latches.get(filename).getLatch().getCount()+WHITE);
+                    System.out.println(BLUE+filename+": ==> "+latches.get(filename).getLatch().getCount()+WHITE);
                     //When store operations are performed by all R dstores
                     if (latches.get(filename).getLatch().getCount() == 0) {
                         //Change the index of the file to store_completed
@@ -366,13 +384,14 @@ public class Controller {
                     }
                     System.out.println(GREEN + "STORAGE NEW CAPACITY: " + storage.size() + " New pair added: (" + filename + "," + this.connectedPort + ")"+WHITE);
 
+                    //TODO
                     synchronized (latches) {
                         if(latches.get(filename)==null || latches.get(filename).getLatch()==null){
                             latches.get(filename).wait();
                         }
                         latches.get(filename).getLatch().countDown();
+                        System.out.println(GREEN+filename+": "+latches.get(filename).getLatch().getCount());
                     }
-//                    System.out.println("QQQQQQ: "+latches.get(filename).getLatch().getCount());
 
                     break;
                 case "LOAD":
@@ -438,6 +457,7 @@ public class Controller {
                     }
                     System.out.println(resp+WHITE);
                     out.println("");
+                    out.flush();
                     break;
                 case "REMOVE":
                     pendingOperations.add(true);
@@ -477,7 +497,32 @@ public class Controller {
                     }
 
                     //Gives timeout number of milliseconds to all R dstores to respond with an ACK
-                    newLatch(filename, out);
+//                    newLatch(filename, out);
+                    latch = new CountDownLatch(R);
+                    pair = new LatchSocketPair(latch,out);
+
+                    latches.put(filename, pair);
+
+                    System.out.println(WHITE+"[INFO]: New latch created for file: "+filename);
+                    started = false;
+                    try {
+                        synchronized (latches) {
+                            if(latches.get(filename)==null){
+                                latches.get(filename).wait();
+                            }
+                            latches.get(filename).getLatch().countDown();
+                        }
+                        started = latches.get(filename).getLatch().await(timeout, TimeUnit.MILLISECONDS);
+                    } catch (InterruptedException e) {
+                        pendingOperations.poll();
+                        e.printStackTrace();
+                    }
+                    if(!started){
+                        System.out.println(RED+"[ISSUE]: Didn't received all "+R+" acknowledgements for "+filename+" from Dstores in time"+WHITE);
+                        pendingOperations.poll();
+                    }
+
+                    System.out.println(BLUE+filename+": ==> "+latches.get(filename).getLatch().getCount()+WHITE);
 
                     //When remove operations are performed by all R dstores
                     if (latches.get(filename).getLatch().getCount() == 0) {
@@ -503,7 +548,7 @@ public class Controller {
 
                     //Counting down the latch for that file
                     synchronized (latches) {
-                        if(latches.get(filename)==null || latches.get(filename).getLatch()==null){
+                        if(latches.get(filename)==null){
                             latches.get(filename).wait();
                         }
                         latches.get(filename).getLatch().countDown();

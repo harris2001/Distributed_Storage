@@ -238,7 +238,6 @@ public class Dstore {
 
                     //Sending store acknowledgement to controller
                     PrintWriter informController = new PrintWriter(controller.getOutputStream());
-                    Thread.sleep(50);
                     send(informController, "STORE_ACK " + filename);
 
                     File[] listOfFiles = dir.listFiles();
@@ -273,8 +272,6 @@ public class Dstore {
                 ex.printStackTrace();
             } catch (IOException ex) {
                 ex.printStackTrace();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
             }
         }
     }

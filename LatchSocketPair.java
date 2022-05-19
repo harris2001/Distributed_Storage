@@ -13,16 +13,6 @@ public class LatchSocketPair {
         this.out = out;
     }
 
-    //Getters and setters
-    public synchronized void setLatch(CountDownLatch latch) {
-        this.latch = latch;
-        this.notify();
-    }
-
-    public void setSocket(PrintWriter out) {
-        this.out = out;
-    }
-
     public CountDownLatch getLatch() {
         return this.latch;
     }
