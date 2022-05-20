@@ -1,6 +1,7 @@
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -48,16 +49,36 @@ public class Controller {
 
     public static ConcurrentLinkedQueue<Boolean> pendingOperations;
 
+    private static HashMap<Integer,ArrayList<String>>dstoreFiles;
+
+    private Thread t;
 
 //    private Controller instance = this;
+
 
     public void rebalance_finished() {
         System.out.println(RED+"<<<<<<<<<<<<<REBLANCE FINISHED"+WHITE);
         synchronized (isRebalancing) {
+//            t.interrupt();
             isRebalancing.set(false);
             isRebalancing.notifyAll();
         }
     }
+
+
+    private static void rebalancing_list(int port, String[] args) {
+        synchronized (dstoreFiles) {
+            ArrayList<String> files = new ArrayList<>();
+            for(int i=1; i<args.length; i++){
+                files.add(args[i]);
+            }
+            System.out.println(RED+"ADDING "+port+" "+files.size()+WHITE);
+            dstoreFiles.put(port, files);
+            dstoreFiles.notify();
+        }
+        return;
+    }
+
 
     public void rebalance() {
         System.out.println(RED+">>>>>>>>>>>>>REBALANCING NOW"+WHITE);
@@ -67,51 +88,89 @@ public class Controller {
             isRebalancing.notifyAll();
         }
 
+        //Step0:
+        //Resetting dstoreFiles hashmap to update its content
+        dstoreFiles = new HashMap<>();
+
         //Step1:
         //Ask each dstore what files it stores
-//        for (int port : dstores.keySet()){
-//            Socket dstore = dstores.get(port);
-//            try {
-//                System.out.println(port);
-//                PrintWriter out = new PrintWriter(dstore.getOutputStream());
-//                out.write("LIST");
-//                BufferedReader in = new BufferedReader(
-//                        new InputStreamReader(dstore.getInputStream()));
-//
-//                System.out.println(YELLOW+"[INFO]:Sending LIST command to dstore "+port+WHITE);
-//                HashMap<Integer,ArrayList<String>>dstoreFiles = new HashMap<Integer, ArrayList<String>>();
-//
-//                //Reading request
-//                String line;
-//                while ((line = in.readLine()) != null) {
-//
-//                    //Splitting request to command and arguments
-//                    String[] args = line.split(" ");
-//                    if(args[0]=="LIST"){
-//                        ArrayList<String> files = new ArrayList<>();
-//                        for(int i=1; i<args.length; i++){
-//                            files.add(args[i]);
+//        t = new Thread(){
+//            @Override
+//            public void run() {
+//                super.run();
+//                int i=0;
+//                while(dstoreFiles.size()<dstores.size()){
+//                    //Busy waiting until all dstores respond
+//                    if (LocalDateTime.now().getSecond() % 10 == 0) {
+//                        if (i == 1) {
+//                            System.out.println(dstoreFiles.keySet().size());
+//                            i = 0;
 //                        }
-//                        dstoreFiles.put(port,files);
+//                    } else {
+//                        i = 1;
 //                    }
-//                    else{
-//                        System.out.println(RED+"[ERROR]: Command "+line+" not found"+WHITE);
+//                    ///^^^^^debug
+//                    try {
+//                        Thread.sleep(500);
+//                    } catch (InterruptedException e) {
+//                        e.printStackTrace();
+//                    }
+//                    for (int port : dstores.keySet()){
+//                        Socket dstore = dstores.get(port);
+//                        System.out.println(">>>>>>"+port);
+//                        try {
+//                            System.out.println(port);
+//                            PrintWriter out = new PrintWriter(dstore.getOutputStream());
+//                            out.println("LIST");
+//                            out.flush();
+//
+////                Thread.sleep(3);
+//                            System.out.println(YELLOW+"[INFO]:Sending LIST command to dstore "+port+WHITE);
+//
+//                        } catch (IOException e) {
+//                            e.printStackTrace();
+//                        }
 //                    }
 //                }
-//
-//            } catch (IOException e) {
-//                e.printStackTrace();
 //            }
+//        };
+//        t.start();
+//
+//        synchronized (dstoreFiles) {
+//            if (dstoreFiles.isEmpty() || dstoreFiles.size() < dstores.size()) {
+//                try {
+//                    dstoreFiles.wait();
+//                } catch (InterruptedException e) {
+//                    e.printStackTrace();
+//                }
+//            }
+//            //Step2:
+//            //Revise file allocation
+//            for (int port : dstores.keySet()) {
+//                synchronized (dstoreFiles) {
+//                    if (dstoreFiles == null) {
+//                        try {
+//                            dstoreFiles.wait();
+//                        } catch (InterruptedException e) {
+//                            e.printStackTrace();
+//                        }
+//                        System.out.println(port + " is empty");
+//                    }
+//                    String ans = "";
+//                    for (int i = 0; i < dstoreFiles.get(port).size(); i++) {
+//                        ans += " " + dstoreFiles.get(port).get(i);
+//                    }
+//                    System.out.println(GREEN + port + ":" + ans + WHITE);
+//                }
+//            }
+
+            //Step3:
+            //Tell each Dstore which files to send to other Dstores
+
+
+            //Step4:
+            //>>>>>>>Dstore Send/remove
 //        }
-
-        //Step2:
-        //Revise file allocation
-
-        //Step3:
-        //Tell each Dstore which files to send to other Dstores
-
-        //Step4:
-        //>>>>>>>Dstore Send/remove
     }
 
     //Possible progress states
@@ -158,26 +217,6 @@ public class Controller {
             }
         }catch(Exception e){System.out.println("error2 "+e);}
 
-    }
-
-    private static void newLatch(String filename, PrintWriter out){
-        CountDownLatch latch = new CountDownLatch(R);
-        LatchSocketPair pair = new LatchSocketPair(latch,out);
-
-        latches.put(filename, pair);
-
-        System.out.println(WHITE+"[INFO]: New latch created for file: "+filename);
-        boolean started = false;
-        try {
-            started = latches.get(filename).getLatch().await(timeout, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            pendingOperations.poll();
-            e.printStackTrace();
-        }
-        if(!started){
-            System.out.println(RED+"[ISSUE]: Didn't received all "+R+" acknowledgements for "+filename+" from Dstores in time"+WHITE);
-            pendingOperations.poll();
-        }
     }
 
     public static ArrayList<Integer> selectRDstores(){
@@ -245,8 +284,22 @@ public class Controller {
                     System.out.println(BLUE + "[INFO]:Received command " + line + " from client on port " + client.getPort()+WHITE);
 
 //                        handleRequest(client,args[0],args,out);
-                    //Adding command to the queue
-                    commandsQueue.add(args);
+
+                    boolean save = true;
+
+                    if (args[0].equals("LIST")) {
+                        for (int port : dstores.keySet()) {
+                            if (dstores.get(port).getPort() == client.getPort()) {
+                                rebalancing_list(port, args);
+                                save = false;
+                            }
+                        }
+                    }
+
+                    if(save) {
+                        //Adding command to the queue
+                        commandsQueue.add(args);
+                    }
 
                     synchronized (isRebalancing) {
                         if (isRebalancing.get() == true) {
@@ -434,6 +487,7 @@ public class Controller {
                     break;
 
                 case "LIST":
+
                     //If there are not enough DStores (less than R), notify client
                     if (dstores.size() < R) {
                         System.out.println(RED + dstores.size() + " " + R + WHITE);

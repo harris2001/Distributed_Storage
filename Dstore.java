@@ -276,7 +276,7 @@ public class Dstore {
         }
     }
     private static void send(PrintWriter out, String message) {
-        System.out.println("SENDING: "+message);
+        System.out.println(YELLOW+"SENDING: "+message+WHITE);
         out.println(message);
         out.flush();
 //            try {

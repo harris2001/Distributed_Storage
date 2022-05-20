@@ -39,7 +39,6 @@ public class Rebalance extends Thread {
             }
             else{
                 controller.rebalance();
-                Thread.sleep(3);
                 System.out.println(controller.CYAN+"DOING REBALANCING STUFF"+controller.WHITE);
 
                 controller.rebalance_finished();
